@@ -11,6 +11,11 @@ const quickLinks = [
     description: "Jump to a sample recipe detail view.",
     href: "/recipes/123",
   },
+  {
+    title: "Cart",
+    description: "See what is in your cart.",
+    href: "/cart",
+  },
 ];
 
 export default function HomePage() {
