@@ -12,6 +12,11 @@ const quickLinks = [
     href: "/recipes/123",
   },
   {
+    title: "Browse stores",
+    description: "Explore the store list page.",
+    href: "/stores",
+  },
+  {
     title: "Cart",
     description: "See what is in your cart.",
     href: "/cart",
