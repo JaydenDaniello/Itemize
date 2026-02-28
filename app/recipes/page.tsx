@@ -1,9 +1,32 @@
 import MealCard from "@/components/recipes/MealCard";
+import { searchMeals } from "@/lib/themealdb";
 import type { MealSummary } from "@/types/themealdb";
 
-const meals: MealSummary[] = [];
+export default async function RecipesPage() {
+  // Fetch popular meals from TheMealDB
+  let meals: MealSummary[] = [];
+  try {
+    // Try fetching a few different popular recipes
+    const aroundTheWorldMeals = await Promise.all([
+      searchMeals("Arrabiata"),
+      searchMeals("Carbonara"),
+      searchMeals("Chicken"),
+      searchMeals("Pasta"),
+    ]);
+    
+    // Flatten and deduplicate
+    const allMeals = aroundTheWorldMeals.flat();
+    const seenIds = new Set<string>();
+    meals = allMeals.filter((meal) => {
+      if (seenIds.has(meal.idMeal)) return false;
+      seenIds.add(meal.idMeal);
+      return true;
+    }).slice(0, 12); // Limit to 12 meals
+  } catch (error) {
+    console.error("Failed to fetch meals:", error);
+    meals = [];
+  }
 
-export default function RecipesPage() {
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-12">
       <section className="flex flex-col gap-3">
@@ -14,8 +37,7 @@ export default function RecipesPage() {
           Find your next favorite meal
         </h1>
         <p className="max-w-2xl text-base text-slate-600">
-          Browse recipes the database of recipes. Use search or filters
-          to discover meal ideas in seconds.
+          Browse recipes from around the world. Click any recipe to see ingredients and instructions.
         </p>
       </section>
 
@@ -25,7 +47,7 @@ export default function RecipesPage() {
             No recipes loaded yet.
           </p>
           <p className="mt-2 text-sm text-slate-600">
-            Connect the list to TheMealDB to fetch data.
+            Unable to fetch recipes from TheMealDB. Please try again later.
           </p>
         </div>
       ) : (
