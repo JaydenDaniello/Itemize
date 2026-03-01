@@ -16,29 +16,29 @@ datasource db {
 
 // User & Preferences
 model User {
-  id           String            @id @default(cuid())
-  email        String            @unique
+  id           String  @id @default(cuid())
+  email        String  @unique
   passwordHash String
   name         String?
 
-  carts        Cart[]
-  preferences  UserPreference?
-  storePrefs   StorePreference[]
+  carts       Cart[]
+  preferences UserPreference?
+  storePrefs  StorePreference[]
 
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model UserPreference {
-  id              String   @id @default(cuid())
-  userId          String   @unique
+  id     String @id @default(cuid())
+  userId String @unique
 
-  optimizeFor     String   @default("cost")
+  optimizeFor String @default("cost")
 
-  monthlyBudget   Decimal? @db.Numeric(10, 2)
-  perTripBudget   Decimal? @db.Numeric(10, 2)
+  monthlyBudget Decimal? @db.Decimal(10, 2)
+  perTripBudget Decimal? @db.Decimal(10, 2)
 
-  user            User     @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id])
 }
 
 model StorePreference {
@@ -48,59 +48,60 @@ model StorePreference {
   isFavorite Boolean @default(false)
   isExcluded Boolean @default(false)
 
-  user       User    @relation(fields: [userId], references: [id])
-  store      Store   @relation(fields: [storeId], references: [id])
+  user  User  @relation(fields: [userId], references: [id])
+  store Store @relation(fields: [storeId], references: [id])
 
   @@unique([userId, storeId])
 }
 
 // Stores & Items
 model Store {
-  id          String        @id @default(cuid())
-  name        String
-  slug        String        @unique
-  address     String?
-  city        String?
-  state       String?
-  zip         String?
-  latitude    Float?
-  longitude   Float?
+  id        String  @id @default(cuid())
+  name      String
+  slug      String  @unique
+  address   String?
+  city      String?
+  state     String?
+  zip       String?
+  latitude  Float?
+  longitude Float?
 
   storeItems  StoreItem[]
   preferences StorePreference[]
   carts       Cart[]
 
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Item {
-  id                String              @id @default(cuid())
-  name              String
-  normalizedName    String
-  category          String?
-  defaultUnit       String?
+  id             String  @id @default(cuid())
+  name           String
+  normalizedName String
+  category       String?
+  defaultUnit    String?
 
   storeItems        StoreItem[]
   recipeIngredients RecipeIngredient[]
+  cartItems         CartItem[]
 
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model StoreItem {
-  id            String   @id @default(cuid())
-  storeId       String
-  itemId        String
+  id      String @id @default(cuid())
+  storeId String
+  itemId  String
 
-  price         Decimal  @db.Numeric(10, 2)
+  price         Decimal  @db.Decimal(10, 2)
   currency      String   @default("USD")
   lastUpdated   DateTime @default(now())
   isEstimated   Boolean  @default(false)
   userConfirmed Boolean  @default(false)
 
-  store         Store    @relation(fields: [storeId], references: [id])
-  item          Item     @relation(fields: [itemId], references: [id])
+  store Store @relation(fields: [storeId], references: [id])
+  item  Item  @relation(fields: [itemId], references: [id])
 
   @@unique([storeId, itemId])
 }
@@ -113,56 +114,58 @@ enum CartStatus {
 }
 
 model Cart {
-  id            String        @id @default(cuid())
-  ownerId       String
-  status        CartStatus    @default(ACTIVE)
+  id      String     @id @default(cuid())
+  ownerId String
+  storeId String?
+  status  CartStatus @default(ACTIVE)
 
-  owner         User          @relation(fields: [ownerId], references: [id])
-  items         CartItem[]
+  owner User       @relation(fields: [ownerId], references: [id])
+  store Store?     @relation(fields: [storeId], references: [id])
+  items CartItem[]
 
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model CartItem {
-  id          String   @id @default(cuid())
-  cartId      String
-  itemId      String
+  id     String @id @default(cuid())
+  cartId String
+  itemId String
 
-  quantity    Float
-  unit        String?
+  quantity Float
+  unit     String?
 
-  cart        Cart     @relation(fields: [cartId], references: [id])
-  item        Item     @relation(fields: [itemId], references: [id])
+  cart Cart @relation(fields: [cartId], references: [id])
+  item Item @relation(fields: [itemId], references: [id])
 
   @@unique([cartId, itemId, unit])
 }
 
 // Recipes
 model Recipe {
-  id            String             @id @default(cuid())
-  externalId    String?
-  title         String
-  source        String?
-  thumbnailUrl  String?
-  instructions  String?
+  id           String  @id @default(cuid())
+  externalId   String?
+  title        String
+  source       String?
+  thumbnailUrl String?
+  instructions String?
 
-  ingredients   RecipeIngredient[]
+  ingredients RecipeIngredient[]
 
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([externalId])
 }
 
 model RecipeIngredient {
-  id          String   @id @default(cuid())
-  recipeId    String
-  itemId      String?
-  rawName     String
-  quantity    Float?
-  unit        String?
+  id       String  @id @default(cuid())
+  recipeId String
+  itemId   String?
+  rawName  String
+  quantity Float?
+  unit     String?
 
-  recipe      Recipe   @relation(fields: [recipeId], references: [id])
-  item        Item?    @relation(fields: [itemId], references: [id])
+  recipe Recipe @relation(fields: [recipeId], references: [id])
+  item   Item?  @relation(fields: [itemId], references: [id])
 }
