@@ -76,7 +76,7 @@ model Store {
 model Item {
   id             String  @id @default(cuid())
   name           String
-  normalizedName String
+  normalizedName String  @unique
   category       String?
   defaultUnit    String?
 
@@ -143,7 +143,7 @@ model CartItem {
 // Recipes
 model Recipe {
   id           String  @id @default(cuid())
-  externalId   String?
+  externalId   String  @unique
   title        String
   source       String?
   thumbnailUrl String?
