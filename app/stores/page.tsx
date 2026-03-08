@@ -1,6 +1,18 @@
-export default function StoresPage() {
-  // Placeholder until backend integration
-  const stores: any[] = [];
+type Store = {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  imageUrl?: string | null;
+};
+
+export default async function StoresPage() {
+  // Fetch stores from the API route (mock for now, DB later)
+  const stores: Store[] = await fetch("http://localhost:3000/api/stores", {
+    cache: "no-store",
+  }).then((res) => res.json());
 
   return (
     <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-12">
@@ -14,8 +26,8 @@ export default function StoresPage() {
         </h1>
 
         <p className="max-w-2xl text-base text-slate-600">
-          Once connected to the backend, this page will show store options,
-          pricing data, and comparisons to help you find the best deals.
+          Browse available stores. Once the backend is connected, this page will
+          automatically load real store data and pricing information.
         </p>
       </section>
 
@@ -30,7 +42,32 @@ export default function StoresPage() {
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* Later: map through stores */}
+          {stores.map((store) => (
+            <div
+              key={store.id}
+              className="rounded-xl border bg-white shadow-sm overflow-hidden"
+            >
+              {store.imageUrl && (
+                <img
+                  src={store.imageUrl}
+                  alt={store.name}
+                  className="h-40 w-full object-cover"
+                />
+              )}
+
+              <div className="p-4 flex flex-col gap-1">
+                <h2 className="text-lg font-semibold text-slate-900">
+                  {store.name}
+                </h2>
+
+                <p className="text-sm text-slate-600">
+                  {store.address}
+                  <br />
+                  {store.city}, {store.state} {store.zip}
+                </p>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </main>
