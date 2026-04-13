@@ -1,12 +1,13 @@
 // File for storeItem-related db requests (remains to be implemented)
 import "server-only"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
 export type StoreItemRow = {
   id: string
   storeId: string
   itemId: string
-  price: string
+  price: Prisma.Decimal
   currency: string
   lastUpdated: Date
   isEstimated: boolean

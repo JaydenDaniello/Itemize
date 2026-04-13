@@ -1,5 +1,4 @@
 import "server-only";
-import { error } from "console";
 import { SignJWT, jwtVerify } from "jose";
 import { env } from "@/lib/env"
 

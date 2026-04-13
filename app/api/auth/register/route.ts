@@ -4,10 +4,7 @@ import bcrypt from "bcryptjs";
 
 import { signAccessToken } from "@/lib/auth/jwt";
 import { ACCESS_COOKIE, accessCookieOptions } from "@/lib/auth/cookies";
-import { UserAuthRow, findUserByEmail, createUser } from "@/lib/db/users"; // still need to be implemented
-
-// Replace with real DB calls (prisma)
-type UserRow = { id: string; email: string; passwordHash: string };
+import { findUserByEmail, createUser } from "@/lib/db/users"; // still need to be implemented
 
 const registerSchema = z.object({
     email: z.email(),

@@ -1,13 +1,14 @@
 // File for userPreference-related db requests (remains to be implemented)
 import "server-only"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
 export type UserPreferenceRow = {
   id: string
   userId: string
   optimizeFor: string
-  monthlyBudget: string | null
-  perTripBudget: string | null
+  monthlyBudget: Prisma.Decimal | null
+  perTripBudget: Prisma.Decimal | null
 }
 
 // Safe select to avoid leaking relations

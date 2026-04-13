@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod"
 import bcrypt from "bcryptjs";
-import { ACCESS_COOKIE, accessCookieOptions, setAccessCookie } from "@/lib/auth/cookies";
+import { ACCESS_COOKIE, accessCookieOptions } from "@/lib/auth/cookies";
 import { signAccessToken } from "@/lib/auth/jwt";
-import { UserAuthRow, findUserByEmail } from "@/lib/db/users"; // still need to be implemented
+import { findUserByEmail } from "@/lib/db/users"; // still need to be implemented
 
 
 const loginSchema = z.object({
