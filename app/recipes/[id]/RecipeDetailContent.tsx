@@ -1,11 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import { useCartStore, type CartIngredient } from '@/lib/cartStore';
-import { normalizeIngredient, matchIngredient } from '@/lib/normalizeIngredient';
-import type { MealDetail } from '@/types/themealdb';
-import IngredientList from '@/components/recipes/IngredientList';
 import { useState } from 'react';
+import IngredientList from '@/components/recipes/IngredientList';
+import { useCartStore, type CartIngredient } from '@/lib/cartStore';
+import { matchIngredient, normalizeIngredient } from '@/lib/normalizeIngredient';
+import type { MealDetail } from '@/types/themealdb';
 
 type RecipeDetailContentProps = {
   meal: MealDetail;
@@ -15,27 +15,46 @@ export default function RecipeDetailContent({ meal }: RecipeDetailContentProps) 
   const addIngredients = useCartStore((state) => state.addIngredients);
   const [addedToCart, setAddedToCart] = useState(false);
 
+  const ingredients = meal.ingredients.map((ingredient) => {
+    const normalizedName = normalizeIngredient(ingredient.name);
+    const matched = matchIngredient(normalizedName);
+    const measure = ingredient.measure || 'To taste';
+
+    return {
+      ...ingredient,
+      measure,
+      normalizedName,
+      mapped: matched !== null,
+      matchedName: matched?.name,
+      itemId: matched?.itemId,
+      key: normalizedName,
+    };
+  });
+
+  const unmappedCount = ingredients.filter((ingredient) => !ingredient.mapped).length;
+
   const handleAddToCart = () => {
-    // Normalize and match each ingredient
-    const cartIngredients: CartIngredient[] = meal.ingredients.map(
-      (ingredient) => {
-        const normalized = normalizeIngredient(ingredient.name);
-        const matched = matchIngredient(normalized);
-
-        return {
-          name: ingredient.name,
-          measure: ingredient.measure,
+    const cartIngredients: CartIngredient[] = ingredients.map((ingredient) => ({
+      key: ingredient.key,
+      name: ingredient.name,
+      measure: ingredient.measure,
+      measures: [ingredient.measure],
+      quantity: 1,
+      mapped: ingredient.mapped,
+      normalizedName: ingredient.normalizedName,
+      recipeSources: [
+        {
+          recipeId: meal.idMeal,
+          recipeName: meal.strMeal,
           quantity: 1,
-          mapped: !!matched,
-          itemId: matched?.itemId,
-        };
-      }
-    );
+          measures: [ingredient.measure],
+        },
+      ],
+      matchedName: ingredient.matchedName,
+      itemId: ingredient.itemId,
+    }));
 
-    // Add to cart store
     addIngredients(cartIngredients);
-
-    // Show feedback
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
@@ -51,12 +70,12 @@ export default function RecipeDetailContent({ meal }: RecipeDetailContentProps) 
         </h1>
         <div className="flex flex-wrap gap-3">
           {meal.strCategory && (
-            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
               {meal.strCategory}
             </span>
           )}
           {meal.strArea && (
-            <span className="text-xs font-medium text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
               {meal.strArea}
             </span>
           )}
@@ -64,10 +83,9 @@ export default function RecipeDetailContent({ meal }: RecipeDetailContentProps) 
       </header>
 
       <section className="grid gap-8 lg:grid-cols-[1.2fr_1fr]">
-        {/* Meal Overview */}
         <div className="flex flex-col gap-6">
           {meal.strMealThumb && (
-            <div className="relative w-full aspect-square bg-slate-100 rounded-2xl overflow-hidden border border-slate-200">
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-slate-200 bg-slate-100">
               <Image
                 src={meal.strMealThumb}
                 alt={meal.strMeal}
@@ -78,42 +96,39 @@ export default function RecipeDetailContent({ meal }: RecipeDetailContentProps) 
             </div>
           )}
 
-          {/* Instructions */}
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-slate-900">Instructions</h2>
-            <p className="mt-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
               {meal.strInstructions}
             </p>
           </div>
         </div>
 
-        {/* Ingredients */}
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col h-fit">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <h2 className="text-lg font-semibold text-slate-900">Ingredients</h2>
+        <div className="flex h-fit flex-col rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="mb-4 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900">Ingredients</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                {ingredients.length - unmappedCount} matched, {unmappedCount} need review
+              </p>
+            </div>
             <button
               onClick={handleAddToCart}
-              className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
                 addedToCart
                   ? 'bg-emerald-500 text-white'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
               }`}
             >
-              {addedToCart ? '✓ Added' : 'Add to Cart'}
+              {addedToCart ? 'Added' : 'Add to Cart'}
             </button>
           </div>
           <div className="mt-4">
-            <IngredientList
-              ingredients={meal.ingredients.map((ing) => ({
-                ...ing,
-                mapped: matchIngredient(normalizeIngredient(ing.name)) !== null,
-              }))}
-            />
+            <IngredientList ingredients={ingredients} />
           </div>
-          {meal.ingredients.length > 0 && (
+          {ingredients.length > 0 && (
             <p className="mt-4 text-xs text-slate-500">
-              {meal.ingredients.filter((ing) => !matchIngredient(normalizeIngredient(ing.name))).length} unmapped
-              ingredient{meal.ingredients.filter((ing) => !matchIngredient(normalizeIngredient(ing.name))).length !== 1 ? 's' : ''}
+              {unmappedCount} unmapped ingredient{unmappedCount !== 1 ? 's' : ''}
             </p>
           )}
         </div>

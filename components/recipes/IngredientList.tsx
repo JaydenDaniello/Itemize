@@ -1,7 +1,7 @@
 import type { Ingredient } from "@/types/themealdb";
 
 type IngredientListProps = {
-  ingredients: (Ingredient & { mapped?: boolean })[];
+  ingredients: (Ingredient & { mapped?: boolean; matchedName?: string })[];
 };
 
 export default function IngredientList({ ingredients }: IngredientListProps) {
@@ -25,8 +25,15 @@ export default function IngredientList({ ingredients }: IngredientListProps) {
           <span className="font-medium text-slate-900">
             {ingredient.name}
           </span>
-          <span className={ingredient.mapped === false ? 'text-amber-700' : 'text-slate-500'}>
-            {ingredient.measure}
+          <span className="text-right">
+            <span className={ingredient.mapped === false ? 'block text-amber-700' : 'block text-slate-500'}>
+              {ingredient.measure}
+            </span>
+            {ingredient.mapped !== undefined && (
+              <span className={ingredient.mapped ? 'block text-xs text-emerald-700' : 'block text-xs text-amber-700'}>
+                {ingredient.mapped ? 'Matched' : 'Needs review'}
+              </span>
+            )}
           </span>
         </li>
       ))}

@@ -1,13 +1,30 @@
 /**
  * Ingredient normalization utility
- * Converts raw ingredient names into normalized form for matching
+ * Converts raw ingredient names into normalized form for matching.
  */
 
-// Synonym map: raw normalized name -> standardized name
 const SYNONYM_MAP: Record<string, string> = {
+  apple: 'apple',
+  apples: 'apple',
+  bacon: 'bacon',
+  basil: 'basil',
+  beef: 'beef',
+  bread: 'bread',
   butter: 'butter',
   'unsalted butter': 'butter',
   'salted butter': 'butter',
+  carrot: 'carrot',
+  carrots: 'carrot',
+  celery: 'celery',
+  cheddar: 'cheese',
+  'cheddar cheese': 'cheese',
+  chicken: 'chicken',
+  'chicken breast': 'chicken',
+  'chicken breasts': 'chicken',
+  'chicken thigh': 'chicken',
+  'chicken thighs': 'chicken',
+  chilli: 'chili',
+  chili: 'chili',
   milk: 'milk',
   'whole milk': 'milk',
   'skim milk': 'milk',
@@ -26,18 +43,30 @@ const SYNONYM_MAP: Record<string, string> = {
   'black pepper': 'pepper',
   flour: 'flour',
   'all purpose flour': 'flour',
+  'all-purpose flour': 'flour',
   sugar: 'sugar',
   'white sugar': 'sugar',
+  'caster sugar': 'sugar',
   olive: 'olive oil',
   'olive oil': 'olive oil',
+  pasta: 'pasta',
+  parsley: 'parsley',
+  potato: 'potato',
+  potatoes: 'potato',
+  rice: 'rice',
   water: 'water',
   tomato: 'tomato',
   tomatoes: 'tomato',
+  'tomato paste': 'tomato paste',
+  'tomato puree': 'tomato puree',
   cheese: 'cheese',
+  parmesan: 'cheese',
+  'parmesan cheese': 'cheese',
   oil: 'oil',
+  'vegetable oil': 'oil',
 };
 
-// Demo items database (hardcoded for now, will need replaced with DB query later)
+// Demo items database. Replace with a DB query once Chance's item data is seeded.
 export const DEMO_ITEMS = [
   { id: '1', name: 'Butter', normalizedName: 'butter' },
   { id: '2', name: 'Milk', normalizedName: 'milk' },
@@ -54,32 +83,39 @@ export const DEMO_ITEMS = [
   { id: '13', name: 'Tomato', normalizedName: 'tomato' },
   { id: '14', name: 'Cheese', normalizedName: 'cheese' },
   { id: '15', name: 'Vegetable Oil', normalizedName: 'oil' },
+  { id: '16', name: 'Chicken', normalizedName: 'chicken' },
+  { id: '17', name: 'Pasta', normalizedName: 'pasta' },
+  { id: '18', name: 'Rice', normalizedName: 'rice' },
+  { id: '19', name: 'Potato', normalizedName: 'potato' },
+  { id: '20', name: 'Carrot', normalizedName: 'carrot' },
+  { id: '21', name: 'Celery', normalizedName: 'celery' },
+  { id: '22', name: 'Bacon', normalizedName: 'bacon' },
+  { id: '23', name: 'Bread', normalizedName: 'bread' },
+  { id: '24', name: 'Apple', normalizedName: 'apple' },
+  { id: '25', name: 'Basil', normalizedName: 'basil' },
+  { id: '26', name: 'Parsley', normalizedName: 'parsley' },
+  { id: '27', name: 'Chili', normalizedName: 'chili' },
+  { id: '28', name: 'Tomato Paste', normalizedName: 'tomato paste' },
+  { id: '29', name: 'Tomato Puree', normalizedName: 'tomato puree' },
 ];
 
 /**
- * Normalize an ingredient name for matching
- * - Convert to lowercase
- * - Trim whitespace
- * - Remove punctuation and special characters
- * - Replace common synonyms
+ * Normalize an ingredient name for matching.
  */
 export function normalizeIngredient(rawName: string): string {
-  let normalized = rawName
+  const normalized = rawName
     .toLowerCase()
     .trim()
-    // Remove punctuation: commas, periods, parentheses, etc.
-    .replace(/[.,()!?\-–—]/g, '')
-    // Collapse multiple spaces
+    .replace(/[.,()!?]/g, '')
+    .replace(/-/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Check synonym map
   return SYNONYM_MAP[normalized] || normalized;
 }
 
 /**
- * Try to match a normalized ingredient name to a known item
- * Returns the matched item or null if no match found
+ * Try to match a normalized ingredient name to a known item.
  */
 export function matchIngredient(
   normalizedName: string
