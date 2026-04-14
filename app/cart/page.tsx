@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useCartStore } from '@/lib/cartStore';
 import {
   usePreferencesStore,
@@ -15,6 +15,15 @@ type EditingCartItem = {
   measure: string;
 } | null;
 
+type Store = {
+  id: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+};
+
 export default function CartPage() {
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
@@ -27,6 +36,10 @@ export default function CartPage() {
     (state) => state.setPerTripBudget
   );
   const [editingItem, setEditingItem] = useState<EditingCartItem>(null);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [storesLoading, setStoresLoading] = useState(true);
+  const [storesError, setStoresError] = useState(false);
+  const [selectedStoreId, setSelectedStoreId] = useState('');
 
   const mappedCount = cartItems.filter((item) => item.mapped).length;
   const unmappedCount = cartItems.length - mappedCount;
@@ -40,6 +53,39 @@ export default function CartPage() {
     (total, item) => total + item.quantity,
     0
   );
+  const selectedStore =
+    stores.find((store) => store.id === selectedStoreId) ?? stores[0];
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStores() {
+      setStoresLoading(true);
+      setStoresError(false);
+
+      try {
+        const response = await fetch('/api/stores');
+        if (!response.ok) throw new Error('Failed to load stores');
+        const data = (await response.json()) as Store[];
+
+        if (!cancelled) {
+          setStores(data);
+          setSelectedStoreId((currentStoreId) => currentStoreId || data[0]?.id || '');
+        }
+      } catch (error) {
+        console.error('Failed to load stores:', error);
+        if (!cancelled) setStoresError(true);
+      } finally {
+        if (!cancelled) setStoresLoading(false);
+      }
+    }
+
+    loadStores();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const renderCartItem = (item: CartIngredient, index: number) => {
     const isEditing = editingItem?.index === index;
@@ -316,6 +362,153 @@ export default function CartPage() {
                   />
                 </div>
               </label>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                Store comparison
+              </p>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Compare this cart across stores
+              </h2>
+              <p className="max-w-2xl text-sm text-slate-600">
+                Store totals will use seeded prices when they are connected. For now, each store shows whether this cart is ready for pricing.
+              </p>
+            </div>
+
+            {storesLoading ? (
+              <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                Loading stores for comparison...
+              </div>
+            ) : storesError ? (
+              <div className="mt-5 rounded-xl border border-dashed border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700">
+                Stores could not be loaded.
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {stores.map((store) => (
+                  <div
+                    key={store.id}
+                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-slate-900">
+                          {store.name}
+                        </h3>
+                        <p className="mt-1 text-xs text-slate-600">
+                          {[store.address, store.city, store.state, store.zip]
+                            .filter(Boolean)
+                            .join(', ')}
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                        Pending
+                      </span>
+                    </div>
+
+                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <dt className="text-xs font-medium text-slate-500">
+                          Ready items
+                        </dt>
+                        <dd className="font-semibold text-emerald-700">
+                          {mappedCount}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-slate-500">
+                          Missing
+                        </dt>
+                        <dd className="font-semibold text-amber-700">
+                          {unmappedCount}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-slate-500">
+                          Preference
+                        </dt>
+                        <dd className="font-semibold capitalize text-slate-900">
+                          {optimizeFor}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-slate-500">
+                          Est. total
+                        </dt>
+                        <dd className="font-semibold text-slate-900">
+                          Awaiting prices
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                Routing and distance
+              </p>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Maps data will complete the trip plan
+              </h2>
+              <p className="max-w-2xl text-sm text-slate-600">
+                This area is reserved for Google Maps distance, drive time, and route planning once routing is implemented.
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[16rem_1fr]">
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                Route target
+                <select
+                  value={selectedStore?.id ?? ''}
+                  onChange={(event) => setSelectedStoreId(event.currentTarget.value)}
+                  disabled={stores.length === 0}
+                  className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition disabled:bg-slate-100 disabled:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                >
+                  {stores.length === 0 ? (
+                    <option value="">No stores loaded</option>
+                  ) : (
+                    stores.map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.name}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+
+              <dl className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Distance
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-900">
+                    Pending Maps
+                  </dd>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Drive time
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-900">
+                    Pending Maps
+                  </dd>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    Route
+                  </dt>
+                  <dd className="mt-2 text-lg font-semibold text-slate-900">
+                    Not planned
+                  </dd>
+                </div>
+              </dl>
             </div>
           </section>
 
