@@ -3,6 +3,10 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { useCartStore } from '@/lib/cartStore';
+import {
+  usePreferencesStore,
+  type OptimizeFor,
+} from '@/lib/preferencesStore';
 
 type EditingCartItem = {
   index: number;
@@ -15,6 +19,12 @@ export default function CartPage() {
   const clearCart = useCartStore((state) => state.clearCart);
   const removeItem = useCartStore((state) => state.removeItem);
   const updateItem = useCartStore((state) => state.updateItem);
+  const optimizeFor = usePreferencesStore((state) => state.optimizeFor);
+  const perTripBudget = usePreferencesStore((state) => state.perTripBudget);
+  const setOptimizeFor = usePreferencesStore((state) => state.setOptimizeFor);
+  const setPerTripBudget = usePreferencesStore(
+    (state) => state.setPerTripBudget
+  );
   const [editingItem, setEditingItem] = useState<EditingCartItem>(null);
 
   const mappedCount = cartItems.filter((item) => item.mapped).length;
@@ -95,6 +105,83 @@ export default function CartPage() {
               {unmappedCount !== 1 ? 's need' : ' needs'} a manual match before
               store totals can be trusted.
             </p>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                Shopping preferences
+              </p>
+              <h2 className="text-lg font-semibold text-slate-900">
+                Tune the next store comparison
+              </h2>
+              <p className="max-w-2xl text-sm text-slate-600">
+                These choices stay on this device for now and will guide store ranking once pricing data is connected.
+              </p>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-[1fr_14rem]">
+              <fieldset className="grid gap-3 sm:grid-cols-2">
+                <legend className="sr-only">Optimization preference</legend>
+                {[
+                  {
+                    value: 'cost',
+                    title: 'Lowest cost',
+                    description: 'Favor stores with the cheapest estimated cart total.',
+                  },
+                  {
+                    value: 'convenience',
+                    title: 'Fewest stops',
+                    description: 'Favor plans that keep the shopping trip simple.',
+                  },
+                ].map((option) => (
+                  <label
+                    key={option.value}
+                    className={`cursor-pointer rounded-xl border p-4 transition ${
+                      optimizeFor === option.value
+                        ? 'border-emerald-300 bg-emerald-50'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="optimizeFor"
+                      value={option.value}
+                      checked={optimizeFor === option.value}
+                      onChange={(event) =>
+                        setOptimizeFor(event.currentTarget.value as OptimizeFor)
+                      }
+                      className="sr-only"
+                    />
+                    <span className="block text-sm font-semibold text-slate-900">
+                      {option.title}
+                    </span>
+                    <span className="mt-1 block text-xs text-slate-600">
+                      {option.description}
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+
+              <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
+                Trip budget
+                <div className="flex min-h-11 items-center rounded-lg border border-slate-300 bg-white px-3 focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-100">
+                  <span className="text-slate-500">$</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputMode="decimal"
+                    value={perTripBudget}
+                    onChange={(event) =>
+                      setPerTripBudget(event.currentTarget.value)
+                    }
+                    placeholder="Optional"
+                    className="min-w-0 flex-1 bg-transparent px-2 py-2 text-sm text-slate-900 outline-none"
+                  />
+                </div>
+              </label>
+            </div>
           </section>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
