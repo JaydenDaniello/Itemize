@@ -213,6 +213,7 @@ function summarizeMeasures(measures: string[]): string {
     .filter(Boolean);
 
   if (cleanedMeasures.length === 0) return 'To taste';
+  if (cleanedMeasures.length === 1) return cleanedMeasures[0];
 
   const parsedMeasures = cleanedMeasures.map(parseMeasure);
   const firstFamily = parsedMeasures[0]?.family;
