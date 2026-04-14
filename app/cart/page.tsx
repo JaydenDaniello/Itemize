@@ -1,12 +1,21 @@
 'use client';
 
 import Link from 'next/link';
+import { useState } from 'react';
 import { useCartStore } from '@/lib/cartStore';
+
+type EditingCartItem = {
+  index: number;
+  quantity: string;
+  measure: string;
+} | null;
 
 export default function CartPage() {
   const cartItems = useCartStore((state) => state.items);
   const clearCart = useCartStore((state) => state.clearCart);
   const removeItem = useCartStore((state) => state.removeItem);
+  const updateItem = useCartStore((state) => state.updateItem);
+  const [editingItem, setEditingItem] = useState<EditingCartItem>(null);
 
   const mappedCount = cartItems.filter((item) => item.mapped).length;
   const unmappedCount = cartItems.length - mappedCount;
@@ -102,52 +111,133 @@ export default function CartPage() {
           </div>
 
           <div className="grid gap-3">
-            {cartItems.map((item, index) => (
-              <div
-                key={item.key ?? `${item.name}-${item.measure}-${index}`}
-                className={`flex items-center justify-between rounded-xl border px-4 py-3 ${
-                  item.mapped
-                    ? 'border-emerald-200 bg-emerald-50'
-                    : 'border-amber-200 bg-amber-50'
-                }`}
-              >
-                <div className="flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-slate-900">{item.name}</p>
-                    {item.quantity > 1 && (
-                      <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        x{item.quantity}
-                      </span>
+            {cartItems.map((item, index) => {
+              const isEditing = editingItem?.index === index;
+
+              return (
+                <div
+                  key={item.key ?? `${item.name}-${item.measure}-${index}`}
+                  className={`flex flex-col gap-4 rounded-xl border px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${
+                    item.mapped
+                      ? 'border-emerald-200 bg-emerald-50'
+                      : 'border-amber-200 bg-amber-50'
+                  }`}
+                >
+                  <div className="flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-slate-900">{item.name}</p>
+                      {item.quantity > 1 && (
+                        <span className="rounded-full bg-white px-2 py-0.5 text-xs font-semibold text-slate-600">
+                          x{item.quantity}
+                        </span>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-[7rem_1fr]">
+                        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                          Quantity
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={editingItem.quantity}
+                            onChange={(event) =>
+                              setEditingItem({
+                                ...editingItem,
+                                quantity: event.target.value,
+                              })
+                            }
+                            className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+                          Measure
+                          <input
+                            type="text"
+                            value={editingItem.measure}
+                            onChange={(event) =>
+                              setEditingItem({
+                                ...editingItem,
+                                measure: event.target.value,
+                              })
+                            }
+                            className="min-h-10 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                          />
+                        </label>
+                      </div>
+                    ) : (
+                      <p className={`text-sm ${item.mapped ? 'text-emerald-700' : 'text-amber-700'}`}>
+                        {item.measure || 'To taste'} - {item.mapped ? `Matched${item.matchedName ? ` to ${item.matchedName}` : ''}` : 'Needs review'}
+                      </p>
+                    )}
+
+                    {item.recipeSources.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.recipeSources.map((source) => (
+                          <span
+                            key={source.recipeId}
+                            className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
+                            title={`${source.recipeName}: ${source.measures.join(' + ')}`}
+                          >
+                            {source.recipeName}
+                            <span className="ml-1 text-slate-500">
+                              ({source.measures.join(' + ')})
+                            </span>
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </div>
-                  <p className={`text-sm ${item.mapped ? 'text-emerald-700' : 'text-amber-700'}`}>
-                    {item.measure || 'To taste'} - {item.mapped ? `Matched${item.matchedName ? ` to ${item.matchedName}` : ''}` : 'Needs review'}
-                  </p>
-                  {item.recipeSources.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {item.recipeSources.map((source) => (
-                        <span
-                          key={source.recipeId}
-                          className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700"
-                          title={`${source.recipeName}: ${source.measures.join(' + ')}`}
+
+                  <div className="flex gap-2 sm:ml-4">
+                    {isEditing ? (
+                      <>
+                        <button
+                          onClick={() => setEditingItem(null)}
+                          className="rounded px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900"
                         >
-                          {source.recipeName}
-                          <span className="ml-1 text-slate-500">
-                            ({source.measures.join(' + ')})
-                          </span>
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => {
+                            updateItem(index, {
+                              quantity: Number(editingItem.quantity),
+                              measure: editingItem.measure,
+                            });
+                            setEditingItem(null);
+                          }}
+                          className="rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                        >
+                          Done
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() =>
+                            setEditingItem({
+                              index,
+                              quantity: item.quantity.toString(),
+                              measure: item.measure,
+                            })
+                          }
+                          className="rounded px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-white hover:text-slate-900"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => removeItem(index)}
+                          className="rounded px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-red-50 hover:text-red-600"
+                        >
+                          Remove
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <button
-                  onClick={() => removeItem(index)}
-                  className="ml-4 rounded px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-red-50 hover:text-red-600"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

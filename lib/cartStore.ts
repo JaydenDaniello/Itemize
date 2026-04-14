@@ -27,6 +27,10 @@ export type RecipeSource = {
 type CartStore = {
   items: CartIngredient[];
   addIngredients: (ingredients: CartIngredient[]) => void;
+  updateItem: (
+    index: number,
+    data: { quantity: number; measure: string }
+  ) => void;
   removeItem: (index: number) => void;
   clearCart: () => void;
 };
@@ -38,6 +42,10 @@ export const useCartStore = create<CartStore>()(
       addIngredients: (ingredients) =>
         set((state) => ({
           items: mergeCartIngredients(state.items, ingredients),
+        })),
+      updateItem: (index, data) =>
+        set((state) => ({
+          items: updateCartIngredient(state.items, index, data),
         })),
       removeItem: (index) =>
         set((state) => ({
@@ -58,6 +66,29 @@ export const useCartStore = create<CartStore>()(
     }
   )
 );
+
+function updateCartIngredient(
+  items: CartIngredient[],
+  index: number,
+  data: { quantity: number; measure: string }
+): CartIngredient[] {
+  return items.map((item, itemIndex) => {
+    if (itemIndex !== index) return item;
+
+    const quantity = Number.isFinite(data.quantity)
+      ? Math.max(1, Math.round(data.quantity))
+      : item.quantity;
+    const measure = data.measure.trim() || 'To taste';
+    const measures = [measure];
+
+    return {
+      ...item,
+      quantity,
+      measure: summarizeMeasures(measures),
+      measures,
+    };
+  });
+}
 
 function mergeCartIngredients(
   existingItems: CartIngredient[],
