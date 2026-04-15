@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation';
 import { useCartStore } from '@/lib/cartStore';
 
 const navItems = [
-  { href: '/', label: 'Home' },
+  { href: '/home', label: 'Home' },
   { href: '/recipes', label: 'Recipes' },
   { href: '/cart', label: 'Cart' },
   { href: '/stores', label: 'Stores' },
@@ -16,8 +16,8 @@ export default function Navigation() {
   const cartItemCount = useCartStore((state) => state.items.length);
 
   const isActive = (href: string) => {
-    if (href === '/') {
-      return pathname === '/';
+    if (href === '/home') {
+      return pathname === '/home';
     }
     return pathname.startsWith(href);
   };
