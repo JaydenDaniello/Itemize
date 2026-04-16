@@ -53,3 +53,18 @@ export async function loginUser(data: LoginInput) {
 
   return body;
 }
+
+export async function logoutUser() {
+  const res = await fetch("/api/auth/logout", {
+    method: "POST",
+    credentials: "include",
+  });
+
+  const body = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    throw new Error(body?.error || "Logout failed");
+  }
+
+  return body;
+}

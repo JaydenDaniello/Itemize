@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { useCartStore } from '@/lib/cartStore';
+import { logoutUser } from '@/lib/auth/client';
 
 const navItems = [
   { href: '/home', label: 'Home' },
@@ -13,7 +15,10 @@ const navItems = [
 
 export default function Navigation() {
   const pathname = usePathname();
+  const router = useRouter();
   const cartItemCount = useCartStore((state) => state.items.length);
+
+  const [loggingOut, setLoggingOut] = useState(false);
 
   const isActive = (href: string) => {
     if (href === '/home') {
@@ -21,6 +26,21 @@ export default function Navigation() {
     }
     return pathname.startsWith(href);
   };
+
+  async function handleLogout() {
+    setLoggingOut(true);
+
+    try {
+      await logoutUser();
+
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      console.error("Logout failed", err);
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   return (
     <nav className="border-b border-slate-200 bg-white sticky top-0 z-50">
@@ -57,6 +77,15 @@ export default function Navigation() {
               );
             })}
           </div>
+
+          <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="text-sm font-medium text-slate-600 hover:text-red-600"
+            >
+              {loggingOut ? "Signing out..." : "Logout"}
+            </button>
         </div>
       </div>
     </nav>
