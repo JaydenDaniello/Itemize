@@ -37,6 +37,10 @@ export default async function StorePage({ params }: StorePageProps) {
         <p className="max-w-2xl text-base text-slate-600">
           Browse items available at this store and compare prices across stores.
         </p>
+
+        <p className="text-xs text-slate-500">
+          Prices may vary by location. Values shown are estimates or accurate as of 4/19/2026.
+        </p>
       </section>
 
       {/* Empty State */}
