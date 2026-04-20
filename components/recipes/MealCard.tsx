@@ -1,4 +1,6 @@
-import Link from "next/link";
+'use client';
+
+import { useRouter } from "next/navigation";
 import type { MealSummary } from "@/types/themealdb";
 
 type MealCardProps = {
@@ -6,10 +8,22 @@ type MealCardProps = {
 };
 
 export default function MealCard({ meal }: MealCardProps) {
+  const router = useRouter();
+
+  async function handleClick() {
+    // Fire ingestion in the background (non-blocking)
+    fetch(`/api/recipes/ingest?id=${meal.idMeal}`, {
+      method: "POST",
+    }).catch(() => {});
+
+    // Navigate immediately
+    router.push(`/recipes/${meal.idMeal}`);
+  }
+
   return (
-    <Link
-      href={`/recipes/${meal.idMeal}`}
-      className="group flex h-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+    <div
+      onClick={handleClick}
+      className="group flex h-full cursor-pointer flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
     >
       <div className="aspect-[4/3] w-full overflow-hidden bg-slate-100">
         <img
@@ -25,6 +39,6 @@ export default function MealCard({ meal }: MealCardProps) {
         </h3>
         <span className="text-sm text-slate-500">View recipe details</span>
       </div>
-    </Link>
+    </div>
   );
 }
