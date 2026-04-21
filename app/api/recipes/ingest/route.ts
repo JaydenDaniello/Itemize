@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lookupMeal } from "@/lib/themealdb";
+import { normalizeIngredient } from "@/lib/ingredient/normalize";
+import { matchIngredientBackend } from "@/lib/ingredient/matchBackend";
 
 // Parse TheMealDB measure strings into { quantity: number | null, unit: string | null }
 function parseMeasure(measure: string | null) {
@@ -60,6 +62,25 @@ export async function POST(req: Request) {
     for (const ing of meal.ingredients) {
       const { quantity, unit } = parseMeasure(ing.measure);
 
+      // Normalize the ingredient name
+      const normalized = normalizeIngredient(ing.name);
+
+      // Try backend match first
+      let match = await matchIngredientBackend(ing.name);
+
+      // If no match, auto-create the Item
+      if (!match) {
+        const newItem = await prisma.item.create({
+          data: {
+            id: normalized,
+            name: ing.name,
+            normalizedName: normalized,
+          },
+        });
+
+        match = { itemId: newItem.id, name: newItem.name };
+      }
+
       await prisma.recipeIngredient.upsert({
         where: {
           recipeId_rawName: {
@@ -68,13 +89,16 @@ export async function POST(req: Request) {
           },
         },
         update: {
-          // For any future quantity refreshs
+          quantity,
+          unit,
+          itemId: match.itemId,
         },
         create: {
           recipeId: recipe.id,
           rawName: ing.name,
           quantity,
           unit,
+          itemId: match.itemId,
         },
       });
     }

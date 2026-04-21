@@ -1,5 +1,6 @@
 import { lookupMeal } from "@/lib/themealdb";
 import RecipeDetailContent from "./RecipeDetailContent";
+import { getCheapestStoreForRecipe } from "@/lib/getCheapestStoreForRecipe";
 
 type RecipeDetailPageProps = {
   params: Promise<{
@@ -28,5 +29,7 @@ export default async function RecipeDetailPage({
     );
   }
 
-  return <RecipeDetailContent meal={meal} />;
+  const cheapest = await getCheapestStoreForRecipe(id);
+
+  return <RecipeDetailContent meal={meal} cheapest={cheapest} />;
 }

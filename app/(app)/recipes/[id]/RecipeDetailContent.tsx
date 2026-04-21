@@ -4,14 +4,23 @@ import Image from 'next/image';
 import { useState } from 'react';
 import IngredientList from '@/components/recipes/IngredientList';
 import { useCartStore, type CartIngredient } from '@/lib/cartStore';
-import { matchIngredient, normalizeIngredient } from '@/lib/normalizeIngredient';
+import { matchIngredient } from '@/lib/normalizeIngredient';
+import { normalizeIngredient } from '@/lib/ingredient/normalize';
 import type { MealDetail } from '@/types/themealdb';
+
+type CheapestStoreResult = {
+  storeId: string;
+  storeName: string;
+  totalPrice: number;
+  missingIngredients: string[];
+};
 
 type RecipeDetailContentProps = {
   meal: MealDetail;
+  cheapest: CheapestStoreResult;
 };
 
-export default function RecipeDetailContent({ meal }: RecipeDetailContentProps) {
+export default function RecipeDetailContent({ meal, cheapest }: RecipeDetailContentProps) {
   const addIngredients = useCartStore((state) => state.addIngredients);
   const [addedToCart, setAddedToCart] = useState(false);
 
@@ -65,9 +74,30 @@ export default function RecipeDetailContent({ meal }: RecipeDetailContentProps) 
         <p className="text-sm font-semibold uppercase tracking-[0.2em] text-emerald-600">
           Recipe
         </p>
+
         <h1 className="text-3xl font-semibold text-slate-900 sm:text-4xl">
           {meal.strMeal}
         </h1>
+
+        {/* Cheapest Store */}
+        {cheapest && (
+          <div className="mt-1">
+            <p className="text-sm font-medium text-slate-700">
+              Cheapest Store:{" "}
+              <span className="font-semibold">{cheapest.storeName}</span> — $
+              {cheapest.totalPrice.toFixed(2)}
+            </p>
+
+            {cheapest.missingIngredients.length > 0 && (
+              <p className="text-xs text-slate-500 mt-1">
+                {cheapest.missingIngredients.length} ingredient
+                {cheapest.missingIngredients.length !== 1 ? "s" : ""} missing prices;
+                totals reflect available data.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-wrap gap-3">
           {meal.strCategory && (
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">

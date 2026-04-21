@@ -3,6 +3,8 @@
  * Converts raw ingredient names into normalized form for matching.
  */
 
+import { normalizeIngredient } from "./ingredient/normalize";
+
 const SYNONYM_MAP: Record<string, string> = {
   apple: 'apple',
   apples: 'apple',
@@ -98,21 +100,6 @@ export const DEMO_ITEMS = [
   { id: '28', name: 'Tomato Paste', normalizedName: 'tomato paste' },
   { id: '29', name: 'Tomato Puree', normalizedName: 'tomato puree' },
 ];
-
-/**
- * Normalize an ingredient name for matching.
- */
-export function normalizeIngredient(rawName: string): string {
-  const normalized = rawName
-    .toLowerCase()
-    .trim()
-    .replace(/[.,()!?]/g, '')
-    .replace(/-/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return SYNONYM_MAP[normalized] || normalized;
-}
 
 /**
  * Try to match a normalized ingredient name to a known item.

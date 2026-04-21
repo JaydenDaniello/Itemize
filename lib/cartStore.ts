@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { normalizeIngredient } from './normalizeIngredient';
+import { normalizeIngredient } from '@/lib/ingredient/normalize';
 
 export type CartIngredient = {
   key: string;
