@@ -11,6 +11,12 @@ export type UserPreferenceRow = {
   perTripBudget: Prisma.Decimal | null
 }
 
+export type UserPreferenceUpsertInput = {
+  optimizeFor?: string;
+  monthlyBudget?: Prisma.Decimal | number | null;
+  perTripBudget?: Prisma.Decimal | number | null;
+};
+
 // Safe select to avoid leaking relations
 const preferenceSelect = {
   id: true,
@@ -31,14 +37,14 @@ export function getUserPreference(
 
 export function upsertUserPreference(
   userId: string,
-  data: Partial<Omit<UserPreferenceRow, "id" | "userId">>
+  data: UserPreferenceUpsertInput
 ): Promise<UserPreferenceRow> {
   return prisma.userPreference.upsert({
     where: { userId },
     update: data,
     create: { userId, ...data },
     select: preferenceSelect,
-  })
+  });
 }
 
 export function ensureUserPreference(

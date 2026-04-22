@@ -26,6 +26,7 @@ export type RecipeSource = {
 
 type CartStore = {
   items: CartIngredient[];
+  setItems: (items: CartIngredient[]) => void;
   addIngredients: (ingredients: CartIngredient[]) => void;
   updateItem: (
     index: number,
@@ -39,6 +40,10 @@ export const useCartStore = create<CartStore>()(
   persist(
     (set) => ({
       items: [],
+      setItems: (items) =>
+        set({
+          items: items.map(normalizeStoredCartIngredient),
+        }),
       addIngredients: (ingredients) =>
         set((state) => ({
           items: mergeCartIngredients(state.items, ingredients),

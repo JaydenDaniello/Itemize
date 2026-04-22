@@ -11,6 +11,7 @@ const navItems = [
   { href: '/recipes', label: 'Recipes' },
   { href: '/cart', label: 'Cart' },
   { href: '/stores', label: 'Stores' },
+  {href: '/preferences', label: 'Preferences' },
 ];
 
 export default function Navigation() {

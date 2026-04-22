@@ -60,8 +60,16 @@ export function setFavoriteStore(
 ): Promise<StorePreferenceRow> {
   return prisma.storePreference.upsert({
     where: { userId_storeId: { userId, storeId } },
-    update: { isFavorite },
-    create: { userId, storeId, isFavorite },
+    update: {
+      isFavorite,
+      ...(isFavorite ? { isExcluded: false } : {}),
+    },
+    create: {
+      userId,
+      storeId,
+      isFavorite,
+      isExcluded: false,
+    },
     select: storePreferenceSelect,
   })
 }
@@ -73,15 +81,23 @@ export function setExcludedStore(
 ): Promise<StorePreferenceRow> {
   return prisma.storePreference.upsert({
     where: { userId_storeId: { userId, storeId } },
-    update: { isExcluded },
-    create: { userId, storeId, isExcluded },
+    update: {
+      isExcluded,
+      ...(isExcluded ? { isFavorite: false } : {}),
+    },
+    create: {
+      userId,
+      storeId,
+      isFavorite: false,
+      isExcluded,
+    },
     select: storePreferenceSelect,
   })
 }
 
 // Delete a preference row entirely
 export function deleteStorePreference(userId: string, storeId: string) {
-  return prisma.storePreference.delete({
-    where: { userId_storeId: { userId, storeId } },
+  return prisma.storePreference.deleteMany({
+    where: { userId, storeId },
   })
 }

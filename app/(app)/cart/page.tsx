@@ -8,6 +8,7 @@ import {
   type OptimizeFor,
 } from '@/lib/preferencesStore';
 import type { CartIngredient } from '@/lib/cartStore';
+import { normalizeIngredient } from '@/lib/ingredient/normalize';
 
 type EditingCartItem = {
   index: number;
@@ -15,26 +16,68 @@ type EditingCartItem = {
   measure: string;
 } | null;
 
-type Store = {
-  id: string;
+type RawStore = {
+  id?: string;
+  storeId?: string;
   name: string;
   address: string | null;
   city: string | null;
   state: string | null;
   zip: string | null;
+  isFavorite?: boolean;
+  isExcluded?: boolean;
+};
+
+type Store = {
+  storeId: string;
+  name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  isFavorite: boolean;
+  isExcluded: boolean;
+};
+
+type PreferencesResponse = {
+  userPreference: {
+    optimizeFor: OptimizeFor;
+    monthlyBudget: string | null;
+    perTripBudget: string | null;
+  };
+  stores: RawStore[];
+};
+
+type CartResponse = {
+  cart: {
+    id: string;
+    ownerId: string;
+    storeId: string | null;
+    status: 'ACTIVE' | 'CHECKED_OUT' | 'ARCHIVED';
+  };
+  items: Array<{
+    id: string;
+    itemId: string;
+    name: string;
+    quantity: number;
+    unit: string | null;
+  }>;
 };
 
 export default function CartPage() {
   const cartItems = useCartStore((state) => state.items);
+  const setItems = useCartStore((state) => state.setItems);
   const clearCart = useCartStore((state) => state.clearCart);
   const removeItem = useCartStore((state) => state.removeItem);
   const updateItem = useCartStore((state) => state.updateItem);
+
   const optimizeFor = usePreferencesStore((state) => state.optimizeFor);
   const perTripBudget = usePreferencesStore((state) => state.perTripBudget);
   const setOptimizeFor = usePreferencesStore((state) => state.setOptimizeFor);
   const setPerTripBudget = usePreferencesStore(
     (state) => state.setPerTripBudget
   );
+
   const [editingItem, setEditingItem] = useState<EditingCartItem>(null);
   const [stores, setStores] = useState<Store[]>([]);
   const [storesLoading, setStoresLoading] = useState(true);
@@ -43,44 +86,148 @@ export default function CartPage() {
 
   const mappedCount = cartItems.filter((item) => item.mapped).length;
   const unmappedCount = cartItems.length - mappedCount;
+
   const readyItems = cartItems
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item.mapped);
+
   const reviewItems = cartItems
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => !item.mapped);
+
   const totalIngredientCount = cartItems.reduce(
     (total, item) => total + item.quantity,
     0
   );
+
   const selectedStore =
-    stores.find((store) => store.id === selectedStoreId) ?? stores[0];
+    stores.find((store) => store.storeId === selectedStoreId) ?? stores[0];
 
   useEffect(() => {
     let cancelled = false;
 
-    async function loadStores() {
+    async function loadCartPreferences() {
       setStoresLoading(true);
       setStoresError(false);
 
       try {
-        const response = await fetch('/api/stores');
-        if (!response.ok) throw new Error('Failed to load stores');
-        const data = (await response.json()) as Store[];
+        const response = await fetch('/api/preferences', {
+          credentials: 'include',
+        });
+
+        const body = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Failed to load preferences');
+        }
+
+        const data = body as PreferencesResponse;
+
+        const normalizedStores: Store[] = data.stores
+          .map((store) => {
+            const resolvedStoreId = store.storeId ?? store.id;
+
+            if (!resolvedStoreId) {
+              return null;
+            }
+
+            return {
+              storeId: resolvedStoreId,
+              name: store.name,
+              address: store.address,
+              city: store.city,
+              state: store.state,
+              zip: store.zip,
+              isFavorite: store.isFavorite ?? false,
+              isExcluded: store.isExcluded ?? false,
+            };
+          })
+          .filter((store): store is Store => store !== null);
+
+        const uniqueStores = Array.from(
+          new Map(
+            normalizedStores.map((store) => [store.storeId, store])
+          ).values()
+        );
+
+        const availableStores = uniqueStores
+          .filter((store) => !store.isExcluded)
+          .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
 
         if (!cancelled) {
-          setStores(data);
-          setSelectedStoreId((currentStoreId) => currentStoreId || data[0]?.id || '');
+          setOptimizeFor(data.userPreference.optimizeFor ?? 'cost');
+          setPerTripBudget(data.userPreference.perTripBudget ?? '');
+          setStores(availableStores);
+
+          setSelectedStoreId((currentStoreId) => {
+            if (
+              currentStoreId &&
+              availableStores.some((store) => store.storeId === currentStoreId)
+            ) {
+              return currentStoreId;
+            }
+
+            return availableStores[0]?.storeId ?? '';
+          });
         }
       } catch (error) {
-        console.error('Failed to load stores:', error);
+        console.error('Failed to load cart preferences:', error);
         if (!cancelled) setStoresError(true);
       } finally {
         if (!cancelled) setStoresLoading(false);
       }
     }
 
-    loadStores();
+    void loadCartPreferences();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAccountCart() {
+      try {
+        const response = await fetch('/api/cart', {
+          credentials: 'include',
+        });
+
+        const body = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Failed to load cart');
+        }
+
+        const data = body as CartResponse;
+
+        const hydratedItems: CartIngredient[] = data.items.map((item) => {
+          const measure = item.unit?.trim() || 'To taste';
+
+          return {
+            key: item.id,
+            name: item.name,
+            measure,
+            measures: [measure],
+            quantity: item.quantity,
+            mapped: true,
+            normalizedName: normalizeIngredient(item.name),
+            recipeSources: [],
+            matchedName: item.name,
+            itemId: item.itemId,
+          };
+        });
+
+        if (!cancelled) {
+          setItems(hydratedItems);
+        }
+      } catch (error) {
+        console.error('Failed to load account cart:', error);
+      }
+    }
+
+    void loadAccountCart();
 
     return () => {
       cancelled = true;
@@ -143,8 +290,15 @@ export default function CartPage() {
               </label>
             </div>
           ) : (
-            <p className={`text-sm ${item.mapped ? 'text-emerald-700' : 'text-amber-700'}`}>
-              {item.measure || 'To taste'} - {item.mapped ? `Matched${item.matchedName ? ` to ${item.matchedName}` : ''}` : 'Needs review'}
+            <p
+              className={`text-sm ${
+                item.mapped ? 'text-emerald-700' : 'text-amber-700'
+              }`}
+            >
+              {item.measure || 'To taste'} -{' '}
+              {item.mapped
+                ? `Matched${item.matchedName ? ` to ${item.matchedName}` : ''}`
+                : 'Needs review'}
             </p>
           )}
 
@@ -227,8 +381,9 @@ export default function CartPage() {
         </h1>
 
         <p className="max-w-2xl text-base text-slate-600">
-          This page collects ingredients from recipes and prepares them for store comparison.
-          Matched ingredients can be priced later; unmatched ingredients need a quick review.
+          This page collects ingredients from recipes and prepares them for
+          store comparison. Matched ingredients can be priced later; unmatched
+          ingredients need a quick review.
         </p>
       </section>
 
@@ -297,7 +452,8 @@ export default function CartPage() {
                 Tune the next store comparison
               </h2>
               <p className="max-w-2xl text-sm text-slate-600">
-                These choices stay on this device for now and will guide store ranking once pricing data is connected.
+                These settings are loaded from your saved account preferences and
+                can be adjusted here for this shopping session.
               </p>
             </div>
 
@@ -308,7 +464,8 @@ export default function CartPage() {
                   {
                     value: 'cost',
                     title: 'Lowest cost',
-                    description: 'Favor stores with the cheapest estimated cart total.',
+                    description:
+                      'Favor stores with the cheapest estimated cart total.',
                   },
                   {
                     value: 'convenience',
@@ -374,7 +531,8 @@ export default function CartPage() {
                 Compare this cart across stores
               </h2>
               <p className="max-w-2xl text-sm text-slate-600">
-                Store totals will use seeded prices when they are connected. For now, each store shows whether this cart is ready for pricing.
+                Store totals will use seeded prices when they are connected. For
+                now, stores reflect your saved favorites and exclusions.
               </p>
             </div>
 
@@ -384,20 +542,32 @@ export default function CartPage() {
               </div>
             ) : storesError ? (
               <div className="mt-5 rounded-xl border border-dashed border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700">
-                Stores could not be loaded.
+                Preferences or stores could not be loaded.
+              </div>
+            ) : stores.length === 0 ? (
+              <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800">
+                No stores are currently available for comparison. Check your
+                excluded stores in Preferences.
               </div>
             ) : (
               <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {stores.map((store) => (
                   <div
-                    key={store.id}
+                    key={store.storeId}
                     className="rounded-xl border border-slate-200 bg-slate-50 p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="font-semibold text-slate-900">
-                          {store.name}
-                        </h3>
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-slate-900">
+                            {store.name}
+                          </h3>
+                          {store.isFavorite && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                              Favorite
+                            </span>
+                          )}
+                        </div>
                         <p className="mt-1 text-xs text-slate-600">
                           {[store.address, store.city, store.state, store.zip]
                             .filter(Boolean)
@@ -431,7 +601,7 @@ export default function CartPage() {
                           Preference
                         </dt>
                         <dd className="font-semibold capitalize text-slate-900">
-                          {optimizeFor}
+                          {store.isFavorite ? 'Favorite' : optimizeFor}
                         </dd>
                       </div>
                       <div>
@@ -458,7 +628,8 @@ export default function CartPage() {
                 Maps data will complete the trip plan
               </h2>
               <p className="max-w-2xl text-sm text-slate-600">
-                This area is reserved for Google Maps distance, drive time, and route planning once routing is implemented.
+                This area is reserved for Google Maps distance, drive time, and
+                route planning once routing is implemented.
               </p>
             </div>
 
@@ -466,7 +637,7 @@ export default function CartPage() {
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
                 Route target
                 <select
-                  value={selectedStore?.id ?? ''}
+                  value={selectedStore?.storeId ?? ''}
                   onChange={(event) => setSelectedStoreId(event.currentTarget.value)}
                   disabled={stores.length === 0}
                   className="min-h-11 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 outline-none transition disabled:bg-slate-100 disabled:text-slate-400 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
@@ -475,7 +646,7 @@ export default function CartPage() {
                     <option value="">No stores loaded</option>
                   ) : (
                     stores.map((store) => (
-                      <option key={store.id} value={store.id}>
+                      <option key={store.storeId} value={store.storeId}>
                         {store.name}
                       </option>
                     ))

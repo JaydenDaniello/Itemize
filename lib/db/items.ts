@@ -30,6 +30,19 @@ export function getItemById(id: string): Promise<ItemRow | null> {
   })
 }
 
+export function getItemsByIds(ids: string[]): Promise<ItemRow[]> {
+  if (ids.length === 0) {
+    return Promise.resolve([]);
+  }
+
+  return prisma.item.findMany({
+    where: {
+      id: { in: ids },
+    },
+    select: itemSelect,
+  });
+}
+
 export function findItemByNormalizedName(
   normalizedName: string
 ): Promise<ItemRow | null> {
