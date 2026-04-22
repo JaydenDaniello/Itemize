@@ -1,22 +1,18 @@
 import { prisma } from "@/lib/prisma";
+import { isDemoStoreName } from "@/lib/demoStores";
 
 export async function getCheapestStoreForRecipe(externalId: string) {
-  // 0. Resolve externalId → internal recipe.id
   const recipe = await prisma.recipe.findUnique({
     where: { externalId },
   });
 
   if (!recipe) return null;
 
-  const recipeId = recipe.id;
-
-  // 1. Load ingredients + mapped items
   const ingredients = await prisma.recipeIngredient.findMany({
-    where: { recipeId },
+    where: { recipeId: recipe.id },
     include: { item: true },
   });
 
-  // 2. Load all stores + their prices
   const stores = await prisma.store.findMany({
     include: {
       storeItems: true,
@@ -25,22 +21,22 @@ export async function getCheapestStoreForRecipe(externalId: string) {
 
   const results = [];
 
-  for (const store of stores) {
+  for (const store of stores.filter((candidate) => isDemoStoreName(candidate.name))) {
     let total = 0;
     const missing: string[] = [];
 
-    for (const ing of ingredients) {
-      if (!ing.itemId) {
-        missing.push(ing.rawName);
+    for (const ingredient of ingredients) {
+      if (!ingredient.itemId) {
+        missing.push(ingredient.rawName);
         continue;
       }
 
       const priceEntry = store.storeItems.find(
-        (si) => si.itemId === ing.itemId
+        (storeItem) => storeItem.itemId === ingredient.itemId
       );
 
       if (!priceEntry) {
-        missing.push(ing.rawName);
+        missing.push(ingredient.rawName);
         continue;
       }
 
@@ -56,16 +52,11 @@ export async function getCheapestStoreForRecipe(externalId: string) {
     });
   }
 
-  // 3. Prefer stores with complete pricing
-  const completeStores = results.filter((r) => r.isComplete);
-
-  let cheapest;
+  const completeStores = results.filter((result) => result.isComplete);
 
   if (completeStores.length > 0) {
-    cheapest = completeStores.sort((a, b) => a.totalPrice - b.totalPrice)[0];
-  } else {
-    cheapest = results.sort((a, b) => a.totalPrice - b.totalPrice)[0];
+    return completeStores.sort((a, b) => a.totalPrice - b.totalPrice)[0];
   }
 
-  return cheapest;
+  return results.sort((a, b) => a.totalPrice - b.totalPrice)[0] ?? null;
 }

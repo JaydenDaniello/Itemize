@@ -17,10 +17,13 @@ type CheapestStoreResult = {
 
 type RecipeDetailContentProps = {
   meal: MealDetail;
-  cheapest: CheapestStoreResult;
+  cheapest: CheapestStoreResult | null;
 };
 
-export default function RecipeDetailContent({ meal, cheapest }: RecipeDetailContentProps) {
+export default function RecipeDetailContent({
+  meal,
+  cheapest,
+}: RecipeDetailContentProps) {
   const addIngredients = useCartStore((state) => state.addIngredients);
   const [addedToCart, setAddedToCart] = useState(false);
 
@@ -28,72 +31,73 @@ export default function RecipeDetailContent({ meal, cheapest }: RecipeDetailCont
     const normalizedName = normalizeIngredient(ingredient.name);
     const matched = matchIngredient(normalizedName);
     const measure = ingredient.measure || 'To taste';
+    const canonicalName = matched?.normalizedName ?? normalizedName;
 
     return {
       ...ingredient,
       measure,
-      normalizedName,
+      normalizedName: canonicalName,
       mapped: matched !== null,
       matchedName: matched?.name,
       itemId: matched?.itemId,
-      key: normalizedName,
+      key: canonicalName,
     };
   });
 
   const unmappedCount = ingredients.filter((ingredient) => !ingredient.mapped).length;
 
-const handleAddToCart = async () => {
-  const cartIngredients: CartIngredient[] = ingredients.map((ingredient) => ({
-    key: ingredient.key,
-    name: ingredient.name,
-    measure: ingredient.measure,
-    measures: [ingredient.measure],
-    quantity: 1,
-    mapped: ingredient.mapped,
-    normalizedName: ingredient.normalizedName,
-    recipeSources: [
-      {
-        recipeId: meal.idMeal,
-        recipeName: meal.strMeal,
-        quantity: 1,
-        measures: [ingredient.measure],
-      },
-    ],
-    matchedName: ingredient.matchedName,
-    itemId: ingredient.itemId,
-  }));
+  const handleAddToCart = async () => {
+    const cartIngredients: CartIngredient[] = ingredients.map((ingredient) => ({
+      key: ingredient.key,
+      name: ingredient.name,
+      measure: ingredient.measure,
+      measures: [ingredient.measure],
+      quantity: 1,
+      mapped: ingredient.mapped,
+      normalizedName: ingredient.normalizedName,
+      recipeSources: [
+        {
+          recipeId: meal.idMeal,
+          recipeName: meal.strMeal,
+          quantity: 1,
+          measures: [ingredient.measure],
+        },
+      ],
+      matchedName: ingredient.matchedName,
+      itemId: ingredient.itemId,
+    }));
 
-  try {
-    const response = await fetch('/api/cart/recipe', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        recipeId: meal.idMeal,
-        recipeName: meal.strMeal,
-        ingredients: ingredients.map((ingredient) => ({
-          name: ingredient.name,
-          measure: ingredient.measure,
-          itemId: ingredient.itemId,
-        })),
-      }),
-    });
+    try {
+      const response = await fetch('/api/cart/recipe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          recipeId: meal.idMeal,
+          recipeName: meal.strMeal,
+          ingredients: ingredients.map((ingredient) => ({
+            name: ingredient.name,
+            measure: ingredient.measure,
+            itemId: ingredient.itemId,
+          })),
+        }),
+      });
 
-    const body = await response.json().catch(() => null);
+      const body = await response.json().catch(() => null);
 
-    if (!response.ok) {
-      throw new Error(body?.error || 'Failed to add recipe to cart');
+      if (!response.ok) {
+        throw new Error(body?.error || 'Failed to add recipe to cart');
+      }
+
+      addIngredients(cartIngredients);
+      setAddedToCart(true);
+      setTimeout(() => setAddedToCart(false), 2000);
+    } catch (error) {
+      console.error('Failed to add recipe to cart:', error);
     }
-
-    addIngredients(cartIngredients);
-    setAddedToCart(true);
-    setTimeout(() => setAddedToCart(false), 2000);
-  } catch (error) {
-    console.error('Failed to add recipe to cart:', error);
-  }
-};
+  };
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-12">
@@ -106,19 +110,18 @@ const handleAddToCart = async () => {
           {meal.strMeal}
         </h1>
 
-        {/* Cheapest Store */}
         {cheapest && (
           <div className="mt-1">
             <p className="text-sm font-medium text-slate-700">
-              Cheapest Store:{" "}
-              <span className="font-semibold">{cheapest.storeName}</span> — $
+              Cheapest Store:{' '}
+              <span className="font-semibold">{cheapest.storeName}</span> - $
               {cheapest.totalPrice.toFixed(2)}
             </p>
 
             {cheapest.missingIngredients.length > 0 && (
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="mt-1 text-xs text-slate-500">
                 {cheapest.missingIngredients.length} ingredient
-                {cheapest.missingIngredients.length !== 1 ? "s" : ""} missing prices;
+                {cheapest.missingIngredients.length !== 1 ? 's' : ''} missing prices;
                 totals reflect available data.
               </p>
             )}

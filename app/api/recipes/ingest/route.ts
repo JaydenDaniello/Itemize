@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { lookupMeal } from "@/lib/themealdb";
-import { normalizeIngredient } from "@/lib/ingredient/normalize";
+import { getCanonicalIngredientName } from "@/lib/normalizeIngredient";
 import { matchIngredientBackend } from "@/lib/ingredient/matchBackend";
 
 // Parse TheMealDB measure strings into { quantity: number | null, unit: string | null }
@@ -12,16 +12,12 @@ function parseMeasure(measure: string | null) {
   if (!trimmed) return { quantity: null, unit: null };
 
   const parts = trimmed.split(" ");
-
-  // Try parsing the first token as a number
   const qty = parseFloat(parts[0]);
 
-  if (isNaN(qty)) {
-    // Not a number → treat entire measure as unit
+  if (Number.isNaN(qty)) {
     return { quantity: null, unit: trimmed };
   }
 
-  // Quantity is valid → unit is everything after the number
   const unit = parts.slice(1).join(" ") || null;
 
   return { quantity: qty, unit };
@@ -36,18 +32,19 @@ export async function POST(req: Request) {
   }
 
   try {
-    // Fetch full recipe details from TheMealDB
     const meal = await lookupMeal(id);
 
     if (!meal) {
       return NextResponse.json({ error: "Recipe not found" }, { status: 404 });
     }
 
-    // Upsert the Recipe
     const recipe = await prisma.recipe.upsert({
       where: { externalId: id },
       update: {
-        // For refreshing data
+        title: meal.strMeal,
+        source: "themealdb",
+        thumbnailUrl: meal.strMealThumb,
+        instructions: meal.strInstructions,
       },
       create: {
         externalId: id,
@@ -58,22 +55,17 @@ export async function POST(req: Request) {
       },
     });
 
-    // Upsert each ingredient
-    for (const ing of meal.ingredients) {
-      const { quantity, unit } = parseMeasure(ing.measure);
+    for (const ingredient of meal.ingredients) {
+      const { quantity, unit } = parseMeasure(ingredient.measure);
+      const normalized = getCanonicalIngredientName(ingredient.name);
 
-      // Normalize the ingredient name
-      const normalized = normalizeIngredient(ing.name);
+      let match = await matchIngredientBackend(ingredient.name);
 
-      // Try backend match first
-      let match = await matchIngredientBackend(ing.name);
-
-      // If no match, auto-create the Item
       if (!match) {
         const newItem = await prisma.item.create({
           data: {
             id: normalized,
-            name: ing.name,
+            name: ingredient.name,
             normalizedName: normalized,
           },
         });
@@ -81,31 +73,42 @@ export async function POST(req: Request) {
         match = { itemId: newItem.id, name: newItem.name };
       }
 
-      await prisma.recipeIngredient.upsert({
+      const existingIngredient = await prisma.recipeIngredient.findFirst({
         where: {
-          recipeId_rawName: {
-            recipeId: recipe.id,
-            rawName: ing.name,
-          },
-        },
-        update: {
-          quantity,
-          unit,
-          itemId: match.itemId,
-        },
-        create: {
           recipeId: recipe.id,
-          rawName: ing.name,
-          quantity,
-          unit,
-          itemId: match.itemId,
+          rawName: ingredient.name,
         },
+        select: { id: true },
       });
+
+      if (existingIngredient) {
+        await prisma.recipeIngredient.update({
+          where: { id: existingIngredient.id },
+          data: {
+            quantity,
+            unit,
+            itemId: match.itemId,
+          },
+        });
+      } else {
+        await prisma.recipeIngredient.create({
+          data: {
+            recipeId: recipe.id,
+            rawName: ingredient.name,
+            quantity,
+            unit,
+            itemId: match.itemId,
+          },
+        });
+      }
     }
 
     return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error("Ingestion error:", err);
-    return NextResponse.json({ error: "Failed to ingest recipe" }, { status: 500 });
+  } catch (error) {
+    console.error("Ingestion error:", error);
+    return NextResponse.json(
+      { error: "Failed to ingest recipe" },
+      { status: 500 }
+    );
   }
 }

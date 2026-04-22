@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useCartStore } from '@/lib/cartStore';
 import {
   usePreferencesStore,
@@ -9,6 +9,7 @@ import {
 } from '@/lib/preferencesStore';
 import type { CartIngredient } from '@/lib/cartStore';
 import { normalizeIngredient } from '@/lib/ingredient/normalize';
+import { isDemoStoreName } from '@/lib/demoStores';
 
 type EditingCartItem = {
   index: number;
@@ -64,6 +65,35 @@ type CartResponse = {
   }>;
 };
 
+type StoreComparison = {
+  storeId: string;
+  storeName: string;
+  address: string;
+  totalPrice: number;
+  pricedItemCount: number;
+  missingItemCount: number;
+  missingItems: string[];
+  isComplete: boolean;
+};
+
+function formatStoreAddress(store: Store) {
+  return [store.address, store.city, store.state, store.zip]
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+  }).format(value);
+}
+
+function buildGoogleMapsDirectionsUrl(store: Store) {
+  const destination = formatStoreAddress(store) || store.name;
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
+
 export default function CartPage() {
   const cartItems = useCartStore((state) => state.items);
   const setItems = useCartStore((state) => state.setItems);
@@ -83,6 +113,11 @@ export default function CartPage() {
   const [storesLoading, setStoresLoading] = useState(true);
   const [storesError, setStoresError] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [storeComparisons, setStoreComparisons] = useState<StoreComparison[]>(
+    []
+  );
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState(false);
 
   const mappedCount = cartItems.filter((item) => item.mapped).length;
   const unmappedCount = cartItems.length - mappedCount;
@@ -102,6 +137,10 @@ export default function CartPage() {
 
   const selectedStore =
     stores.find((store) => store.storeId === selectedStoreId) ?? stores[0];
+  const comparisonMap = useMemo(
+    () => new Map(storeComparisons.map((comparison) => [comparison.storeId, comparison])),
+    [storeComparisons]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -152,6 +191,7 @@ export default function CartPage() {
 
         const availableStores = uniqueStores
           .filter((store) => !store.isExcluded)
+          .filter((store) => isDemoStoreName(store.name))
           .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
 
         if (!cancelled) {
@@ -183,7 +223,7 @@ export default function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setOptimizeFor, setPerTripBudget]);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,7 +272,163 @@ export default function CartPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [setItems]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStoreComparisons() {
+      if (stores.length === 0 || cartItems.length === 0) {
+        setStoreComparisons([]);
+        setComparisonError(false);
+        setComparisonLoading(false);
+        return;
+      }
+
+      const pricedItems = cartItems
+        .filter((item) => item.itemId)
+        .map((item) => ({
+          itemId: item.itemId as string,
+          quantity: item.quantity,
+          name: item.name,
+        }));
+
+      if (pricedItems.length === 0) {
+        setStoreComparisons([]);
+        setComparisonError(false);
+        setComparisonLoading(false);
+        return;
+      }
+
+      setComparisonLoading(true);
+      setComparisonError(false);
+
+      try {
+        const response = await fetch('/api/store-comparison', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            storeIds: stores.map((store) => store.storeId),
+            items: pricedItems,
+          }),
+        });
+
+        const body = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(body?.error || 'Failed to compare stores');
+        }
+
+        if (!cancelled) {
+          setStoreComparisons((body?.comparisons ?? []) as StoreComparison[]);
+        }
+      } catch (error) {
+        console.error('Failed to compare stores:', error);
+        if (!cancelled) setComparisonError(true);
+      } finally {
+        if (!cancelled) setComparisonLoading(false);
+      }
+    }
+
+    void loadStoreComparisons();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cartItems, stores]);
+
+  async function handlePersistedUpdate(
+    index: number,
+    quantity: number,
+    measure: string
+  ) {
+    const item = cartItems[index];
+    if (!item) return;
+
+    const normalizedQuantity = Number.isFinite(quantity)
+      ? Math.max(1, Math.round(quantity))
+      : item.quantity;
+
+    const normalizedMeasure = measure.trim() || 'To taste';
+
+    try {
+      const response = await fetch('/api/cart/item', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: item.name,
+          quantity: normalizedQuantity,
+          measure: normalizedMeasure,
+        }),
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(body?.error || 'Failed to update cart item');
+      }
+
+      updateItem(index, {
+        quantity: normalizedQuantity,
+        measure: normalizedMeasure,
+      });
+    } catch (error) {
+      console.error('Failed to update cart item:', error);
+    }
+  }
+
+  async function handlePersistedRemove(index: number) {
+    const item = cartItems[index];
+    if (!item) return;
+
+    try {
+      const response = await fetch('/api/cart/item', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          name: item.name,
+          measure: item.measure,
+        }),
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(body?.error || 'Failed to remove cart item');
+      }
+
+      removeItem(index);
+    } catch (error) {
+      console.error('Failed to remove cart item:', error);
+    }
+  }
+
+  async function handlePersistedClearCart() {
+    try {
+      const response = await fetch('/api/cart/clear', {
+        method: 'POST',
+        credentials: 'include',
+      });
+
+      const body = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(body?.error || 'Failed to clear cart');
+      }
+
+      clearCart();
+    } catch (error) {
+      console.error('Failed to clear cart:', error);
+    }
+  }
 
   async function handlePersistedUpdate(index: number, quantity: number, measure: string) {
   const item = cartItems[index];
@@ -470,7 +666,7 @@ async function handlePersistedClearCart() {
 
         <p className="max-w-2xl text-base text-slate-600">
           This page collects ingredients from recipes and prepares them for
-          store comparison. Matched ingredients can be priced later; unmatched
+          seeded store comparison. Matched ingredients can be priced right away; unmatched
           ingredients need a quick review.
         </p>
       </section>
@@ -517,18 +713,6 @@ async function handlePersistedClearCart() {
                 {unmappedCount}
               </p>
             </div>
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Store comparison handoff
-            </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              {mappedCount} ingredient{mappedCount !== 1 ? 's are' : ' is'} ready
-              for store price matching. {unmappedCount} ingredient
-              {unmappedCount !== 1 ? 's need' : ' needs'} a manual match before
-              store totals can be trusted.
-            </p>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -610,19 +794,20 @@ async function handlePersistedClearCart() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
-                Store comparison
-              </p>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Compare this cart across stores
-              </h2>
-              <p className="max-w-2xl text-sm text-slate-600">
-                Store totals will use seeded prices when they are connected. For
-                now, stores reflect your saved favorites and exclusions.
-              </p>
-            </div>
+            <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                  Store comparison
+                </p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Compare this cart across stores
+                </h2>
+                <p className="max-w-2xl text-sm text-slate-600">
+                  These totals use seeded demo prices for Aldi, Walmart, and Whole
+                  Foods. Missing counts reflect any cart rows that still need a
+                  match or do not yet have a seeded store price.
+                </p>
+              </div>
 
             {storesLoading ? (
               <div className="mt-5 rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
@@ -632,94 +817,120 @@ async function handlePersistedClearCart() {
               <div className="mt-5 rounded-xl border border-dashed border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700">
                 Preferences or stores could not be loaded.
               </div>
-            ) : stores.length === 0 ? (
-              <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800">
-                No stores are currently available for comparison. Check your
-                excluded stores in Preferences.
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                {stores.map((store) => (
-                  <div
-                    key={store.storeId}
-                    className="rounded-xl border border-slate-200 bg-slate-50 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold text-slate-900">
-                            {store.name}
-                          </h3>
-                          {store.isFavorite && (
-                            <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
-                              Favorite
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1 text-xs text-slate-600">
-                          {[store.address, store.city, store.state, store.zip]
-                            .filter(Boolean)
-                            .join(', ')}
-                        </p>
-                      </div>
-                      <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
-                        Pending
-                      </span>
-                    </div>
+              ) : stores.length === 0 ? (
+                <div className="mt-5 rounded-xl border border-dashed border-amber-200 bg-amber-50 px-4 py-5 text-sm text-amber-800">
+                  No demo stores are available for comparison. Check your
+                  excluded stores in Preferences.
+                </div>
+              ) : comparisonError ? (
+                <div className="mt-5 rounded-xl border border-dashed border-red-200 bg-red-50 px-4 py-5 text-sm text-red-700">
+                  Store totals could not be calculated.
+                </div>
+              ) : (
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {stores.map((store) => {
+                    const comparison = comparisonMap.get(store.storeId);
+                    const totalMissingCount =
+                      unmappedCount + (comparison?.missingItemCount ?? 0);
+                    const statusLabel = comparison
+                      ? totalMissingCount === 0
+                        ? 'Complete'
+                        : 'Partial'
+                      : comparisonLoading
+                        ? 'Loading'
+                        : 'Pending';
 
-                    <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <dt className="text-xs font-medium text-slate-500">
-                          Ready items
-                        </dt>
-                        <dd className="font-semibold text-emerald-700">
-                          {mappedCount}
-                        </dd>
+                    return (
+                      <div
+                        key={store.storeId}
+                        className="rounded-xl border border-slate-200 bg-slate-50 p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-slate-900">
+                                {store.name}
+                              </h3>
+                              {store.isFavorite && (
+                                <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
+                                  Favorite
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 text-xs text-slate-600">
+                              {formatStoreAddress(store)}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-slate-600">
+                            {statusLabel}
+                          </span>
+                        </div>
+
+                        <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <dt className="text-xs font-medium text-slate-500">
+                              Ready items
+                            </dt>
+                            <dd className="font-semibold text-emerald-700">
+                              {comparison?.pricedItemCount ?? 0}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-medium text-slate-500">
+                              Missing
+                            </dt>
+                            <dd className="font-semibold text-amber-700">
+                              {totalMissingCount}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-medium text-slate-500">
+                              Preference
+                            </dt>
+                            <dd className="font-semibold capitalize text-slate-900">
+                              {store.isFavorite ? 'favorite' : optimizeFor}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-xs font-medium text-slate-500">
+                              Est. total
+                            </dt>
+                            <dd className="font-semibold text-slate-900">
+                              {comparison
+                                ? formatCurrency(comparison.totalPrice)
+                                : comparisonLoading
+                                  ? 'Loading...'
+                                  : 'Unavailable'}
+                            </dd>
+                          </div>
+                        </dl>
+
+                        {comparison && totalMissingCount > 0 && (
+                          <p className="mt-3 text-xs text-slate-600">
+                            Partial total based on currently matched and seeded
+                            items.
+                          </p>
+                        )}
                       </div>
-                      <div>
-                        <dt className="text-xs font-medium text-slate-500">
-                          Missing
-                        </dt>
-                        <dd className="font-semibold text-amber-700">
-                          {unmappedCount}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-medium text-slate-500">
-                          Preference
-                        </dt>
-                        <dd className="font-semibold capitalize text-slate-900">
-                          {store.isFavorite ? 'Favorite' : optimizeFor}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-xs font-medium text-slate-500">
-                          Est. total
-                        </dt>
-                        <dd className="font-semibold text-slate-900">
-                          Awaiting prices
-                        </dd>
-                      </div>
-                    </dl>
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col gap-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
-                Routing and distance
-              </p>
-              <h2 className="text-lg font-semibold text-slate-900">
-                Maps data will complete the trip plan
-              </h2>
-              <p className="max-w-2xl text-sm text-slate-600">
-                This area is reserved for Google Maps distance, drive time, and
-                route planning once routing is implemented.
-              </p>
-            </div>
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600">
+                  Routing
+                </p>
+                <h2 className="text-lg font-semibold text-slate-900">
+                  Open the selected store in Google Maps
+                </h2>
+                <p className="max-w-2xl text-sm text-slate-600">
+                  For the MVP, routing hands off to Google Maps using your selected
+                  store and current location.
+                </p>
+              </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-[16rem_1fr]">
               <label className="flex flex-col gap-2 text-sm font-medium text-slate-700">
@@ -742,34 +953,33 @@ async function handlePersistedClearCart() {
                 </select>
               </label>
 
-              <dl className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Distance
-                  </dt>
-                  <dd className="mt-2 text-lg font-semibold text-slate-900">
-                    Pending Maps
-                  </dd>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Drive time
-                  </dt>
-                  <dd className="mt-2 text-lg font-semibold text-slate-900">
-                    Pending Maps
-                  </dd>
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                    Route
-                  </dt>
-                  <dd className="mt-2 text-lg font-semibold text-slate-900">
-                    Not planned
-                  </dd>
-                </div>
-              </dl>
-            </div>
-          </section>
+                {selectedStore ? (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                      Selected store
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold text-slate-900">
+                      {selectedStore.name}
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {formatStoreAddress(selectedStore)}
+                    </p>
+                    <a
+                      href={buildGoogleMapsDirectionsUrl(selectedStore)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-4 inline-flex rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
+                    >
+                      Open route in Google Maps
+                    </a>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-sm text-slate-600">
+                    Select a store to open a route in Google Maps.
+                  </div>
+                )}
+              </div>
+            </section>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-slate-600">

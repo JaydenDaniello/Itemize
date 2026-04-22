@@ -14,7 +14,7 @@ export async function ingestMeal(mealId: string) {
       id: meal.idMeal,
       title: meal.strMeal,
       instructions: meal.strInstructions,
-      thumbnail: meal.strMealThumb,
+      thumbnailUrl: meal.strMealThumb,
       externalId: meal.idMeal,
     },
   });
@@ -38,22 +38,34 @@ export async function ingestMeal(mealId: string) {
     });
 
     // 2b. Insert RecipeIngredient
-    await prisma.recipeIngredient.upsert({
+    const existingIngredient = await prisma.recipeIngredient.findFirst({
       where: {
-        recipeId_rawName: {
-          recipeId: recipe.id,
-          rawName: ing.name,
-        },
-      },
-      update: {},
-      create: {
         recipeId: recipe.id,
         rawName: ing.name,
-        quantity,
-        unit,
-        itemId: item.id,
       },
+      select: { id: true },
     });
+
+    if (existingIngredient) {
+      await prisma.recipeIngredient.update({
+        where: { id: existingIngredient.id },
+        data: {
+          quantity,
+          unit,
+          itemId: item.id,
+        },
+      });
+    } else {
+      await prisma.recipeIngredient.create({
+        data: {
+          recipeId: recipe.id,
+          rawName: ing.name,
+          quantity,
+          unit,
+          itemId: item.id,
+        },
+      });
+    }
   }
 
   return recipe;

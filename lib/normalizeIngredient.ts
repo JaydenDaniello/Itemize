@@ -1,114 +1,119 @@
-/**
- * Ingredient normalization utility
- * Converts raw ingredient names into normalized form for matching.
- */
+import { normalizeIngredient as normalizeRawIngredient } from "./ingredient/normalize";
 
-import { normalizeIngredient } from "./ingredient/normalize";
-
-const SYNONYM_MAP: Record<string, string> = {
-  apple: 'apple',
-  apples: 'apple',
-  bacon: 'bacon',
-  basil: 'basil',
-  beef: 'beef',
-  bread: 'bread',
-  butter: 'butter',
-  'unsalted butter': 'butter',
-  'salted butter': 'butter',
-  carrot: 'carrot',
-  carrots: 'carrot',
-  celery: 'celery',
-  cheddar: 'cheese',
-  'cheddar cheese': 'cheese',
-  chicken: 'chicken',
-  'chicken breast': 'chicken',
-  'chicken breasts': 'chicken',
-  'chicken thigh': 'chicken',
-  'chicken thighs': 'chicken',
-  chilli: 'chili',
-  chili: 'chili',
-  milk: 'milk',
-  'whole milk': 'milk',
-  'skim milk': 'milk',
-  cream: 'cream',
-  'heavy cream': 'cream',
-  'sour cream': 'cream',
-  egg: 'egg',
-  eggs: 'egg',
-  garlic: 'garlic',
-  'garlic clove': 'garlic',
-  'garlic cloves': 'garlic',
-  onion: 'onion',
-  onions: 'onion',
-  salt: 'salt',
-  pepper: 'pepper',
-  'black pepper': 'pepper',
-  flour: 'flour',
-  'all purpose flour': 'flour',
-  'all-purpose flour': 'flour',
-  sugar: 'sugar',
-  'white sugar': 'sugar',
-  'caster sugar': 'sugar',
-  olive: 'olive oil',
-  'olive oil': 'olive oil',
-  pasta: 'pasta',
-  parsley: 'parsley',
-  potato: 'potato',
-  potatoes: 'potato',
-  rice: 'rice',
-  water: 'water',
-  tomato: 'tomato',
-  tomatoes: 'tomato',
-  'tomato paste': 'tomato paste',
-  'tomato puree': 'tomato puree',
-  cheese: 'cheese',
-  parmesan: 'cheese',
-  'parmesan cheese': 'cheese',
-  oil: 'oil',
-  'vegetable oil': 'oil',
+type DemoItem = {
+  id: string;
+  name: string;
+  normalizedName: string;
 };
 
-// Demo items database. Replace with a DB query once Chance's item data is seeded.
-export const DEMO_ITEMS = [
-  { id: '1', name: 'Butter', normalizedName: 'butter' },
-  { id: '2', name: 'Milk', normalizedName: 'milk' },
-  { id: '3', name: 'Cream', normalizedName: 'cream' },
-  { id: '4', name: 'Eggs', normalizedName: 'egg' },
-  { id: '5', name: 'Garlic', normalizedName: 'garlic' },
-  { id: '6', name: 'Onion', normalizedName: 'onion' },
-  { id: '7', name: 'Salt', normalizedName: 'salt' },
-  { id: '8', name: 'Black Pepper', normalizedName: 'pepper' },
-  { id: '9', name: 'All Purpose Flour', normalizedName: 'flour' },
-  { id: '10', name: 'Sugar', normalizedName: 'sugar' },
-  { id: '11', name: 'Olive Oil', normalizedName: 'olive oil' },
-  { id: '12', name: 'Water', normalizedName: 'water' },
-  { id: '13', name: 'Tomato', normalizedName: 'tomato' },
-  { id: '14', name: 'Cheese', normalizedName: 'cheese' },
-  { id: '15', name: 'Vegetable Oil', normalizedName: 'oil' },
-  { id: '16', name: 'Chicken', normalizedName: 'chicken' },
-  { id: '17', name: 'Pasta', normalizedName: 'pasta' },
-  { id: '18', name: 'Rice', normalizedName: 'rice' },
-  { id: '19', name: 'Potato', normalizedName: 'potato' },
-  { id: '20', name: 'Carrot', normalizedName: 'carrot' },
-  { id: '21', name: 'Celery', normalizedName: 'celery' },
-  { id: '22', name: 'Bacon', normalizedName: 'bacon' },
-  { id: '23', name: 'Bread', normalizedName: 'bread' },
-  { id: '24', name: 'Apple', normalizedName: 'apple' },
-  { id: '25', name: 'Basil', normalizedName: 'basil' },
-  { id: '26', name: 'Parsley', normalizedName: 'parsley' },
-  { id: '27', name: 'Chili', normalizedName: 'chili' },
-  { id: '28', name: 'Tomato Paste', normalizedName: 'tomato paste' },
-  { id: '29', name: 'Tomato Puree', normalizedName: 'tomato puree' },
+const ALIAS_MAP: Record<string, string> = {
+  all_purpose_flour: "flour",
+  allpurpose_flour: "flour",
+  apples: "apple",
+  black_pepper: "pepper",
+  butter_unsalted: "butter",
+  butter_salted: "butter",
+  carrots: "carrot",
+  cheddar_cheese: "cheese",
+  chicken_breast: "chicken",
+  chicken_breasts: "chicken",
+  chicken_thigh: "chicken",
+  chicken_thighs: "chicken",
+  chopped_tomatoes: "tomatoes",
+  chili: "chilli",
+  chilli: "chilli",
+  chillies: "chilli",
+  coriander_seed: "coriander_seeds",
+  cumin_seed: "cumin_seeds",
+  dried_fenugreek_leaves: "dried_fenugreek",
+  eggs: "egg",
+  fenugreek: "dried_fenugreek",
+  garlic_clove: "garlic",
+  garlic_cloves: "garlic",
+  ginger_garlic_paste: "ginger_paste",
+  green_chillies: "green_chilli",
+  heavy_cream: "cream",
+  italian_herbs: "italian_seasoning",
+  kasuri_methi: "dried_fenugreek",
+  olive: "olive_oil",
+  onions: "onion",
+  parmigianoreggiano: "parmigiano_reggiano",
+  parmesan: "parmigiano_reggiano",
+  parmesan_cheese: "parmigiano_reggiano",
+  penne: "penne_rigate",
+  potatoes: "potato",
+  red_chile_flakes: "red_chilli_flakes",
+  red_chilli_flake: "red_chilli_flakes",
+  skim_milk: "milk",
+  sour_cream: "cream",
+  tomatoes: "tomatoes",
+  tomato: "tomatoes",
+  vegetable_oil: "vegetable_oil",
+  whole_milk: "milk",
+  white_sugar: "sugar",
+  yoghurt: "yogurt",
+};
+
+export const DEMO_ITEMS: DemoItem[] = [
+  { id: "apple", name: "Apple", normalizedName: "apple" },
+  { id: "basil", name: "Basil", normalizedName: "basil" },
+  { id: "bread", name: "Bread", normalizedName: "bread" },
+  { id: "butter", name: "Butter", normalizedName: "butter" },
+  { id: "carrot", name: "Carrot", normalizedName: "carrot" },
+  { id: "cheese", name: "Cheese", normalizedName: "cheese" },
+  { id: "chicken", name: "Chicken", normalizedName: "chicken" },
+  { id: "chilli", name: "Chilli", normalizedName: "chilli" },
+  { id: "chilli_powder", name: "Chilli Powder", normalizedName: "chilli_powder" },
+  { id: "coriander_seeds", name: "Coriander Seeds", normalizedName: "coriander_seeds" },
+  { id: "cream", name: "Cream", normalizedName: "cream" },
+  { id: "cumin_seeds", name: "Cumin Seeds", normalizedName: "cumin_seeds" },
+  { id: "dried_fenugreek", name: "Dried Fenugreek", normalizedName: "dried_fenugreek" },
+  { id: "egg", name: "Egg", normalizedName: "egg" },
+  { id: "flour", name: "Flour", normalizedName: "flour" },
+  { id: "garam_masala", name: "Garam Masala", normalizedName: "garam_masala" },
+  { id: "garlic", name: "Garlic", normalizedName: "garlic" },
+  { id: "ginger_paste", name: "Ginger Paste", normalizedName: "ginger_paste" },
+  { id: "green_chilli", name: "Green Chilli", normalizedName: "green_chilli" },
+  { id: "italian_seasoning", name: "Italian Seasoning", normalizedName: "italian_seasoning" },
+  { id: "milk", name: "Milk", normalizedName: "milk" },
+  { id: "olive_oil", name: "Olive Oil", normalizedName: "olive_oil" },
+  { id: "onion", name: "Onion", normalizedName: "onion" },
+  { id: "parmigiano_reggiano", name: "Parmigiano-Reggiano", normalizedName: "parmigiano_reggiano" },
+  { id: "pasta", name: "Pasta", normalizedName: "pasta" },
+  { id: "penne_rigate", name: "Penne Rigate", normalizedName: "penne_rigate" },
+  { id: "pepper", name: "Black Pepper", normalizedName: "pepper" },
+  { id: "potato", name: "Potato", normalizedName: "potato" },
+  { id: "red_chilli_flakes", name: "Red Chilli Flakes", normalizedName: "red_chilli_flakes" },
+  { id: "rice", name: "Rice", normalizedName: "rice" },
+  { id: "salt", name: "Salt", normalizedName: "salt" },
+  { id: "sugar", name: "Sugar", normalizedName: "sugar" },
+  { id: "tomatoes", name: "Tomatoes", normalizedName: "tomatoes" },
+  { id: "turmeric_powder", name: "Turmeric Powder", normalizedName: "turmeric_powder" },
+  { id: "vegetable_oil", name: "Vegetable Oil", normalizedName: "vegetable_oil" },
+  { id: "water", name: "Water", normalizedName: "water" },
+  { id: "yogurt", name: "Yogurt", normalizedName: "yogurt" },
 ];
 
-/**
- * Try to match a normalized ingredient name to a known item.
- */
+const DEMO_ITEM_MAP = new Map(
+  DEMO_ITEMS.map((item) => [item.normalizedName, item])
+);
+
+export function getCanonicalIngredientName(raw: string): string {
+  const normalized = normalizeRawIngredient(raw);
+  return ALIAS_MAP[normalized] ?? normalized;
+}
+
 export function matchIngredient(
-  normalizedName: string
-): { itemId: string; name: string } | null {
-  const matched = DEMO_ITEMS.find(
-    (item) => item.normalizedName === normalizedName
-  );
-  return matched ? { itemId: matched.id, name: matched.name } : null;
+  rawOrNormalizedName: string
+): { itemId: string; name: string; normalizedName: string } | null {
+  const normalizedName = getCanonicalIngredientName(rawOrNormalizedName);
+  const matched = DEMO_ITEM_MAP.get(normalizedName);
+
+  if (!matched) return null;
+
+  return {
+    itemId: matched.id,
+    name: matched.name,
+    normalizedName: matched.normalizedName,
+  };
 }

@@ -1,8 +1,8 @@
 import { prisma } from "@/lib/prisma";
-import { normalizeIngredient } from "./normalize";
+import { getCanonicalIngredientName } from "@/lib/normalizeIngredient";
 
 export async function matchIngredientBackend(rawName: string) {
-  const normalized = normalizeIngredient(rawName);
+  const normalized = getCanonicalIngredientName(rawName);
 
   const item = await prisma.item.findUnique({
     where: { normalizedName: normalized },

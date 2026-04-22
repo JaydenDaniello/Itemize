@@ -3,8 +3,9 @@ import { getCheapestStoreForRecipe } from "@/lib/getCheapestStoreForRecipe";
 
 export async function GET(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const result = await getCheapestStoreForRecipe(params.id);
+  const { id } = await params;
+  const result = await getCheapestStoreForRecipe(id);
   return NextResponse.json(result);
 }
