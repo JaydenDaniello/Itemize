@@ -887,10 +887,6 @@ export default function CartPage() {
                 <h2 className="text-lg font-semibold text-slate-900">
                   Open the selected store in Google Maps
                 </h2>
-                <p className="max-w-2xl text-sm text-slate-600">
-                  For the MVP, routing hands off to Google Maps using your selected
-                  store and current location.
-                </p>
               </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-[16rem_1fr]">
