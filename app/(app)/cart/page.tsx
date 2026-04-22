@@ -234,6 +234,93 @@ export default function CartPage() {
     };
   }, []);
 
+  async function handlePersistedUpdate(index: number, quantity: number, measure: string) {
+  const item = cartItems[index];
+  if (!item) return;
+
+  const normalizedQuantity = Number.isFinite(quantity)
+    ? Math.max(1, Math.round(quantity))
+    : item.quantity;
+
+  const normalizedMeasure = measure.trim() || 'To taste';
+
+  try {
+    const response = await fetch('/api/cart/item', {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: item.name,
+        quantity: normalizedQuantity,
+        measure: normalizedMeasure,
+      }),
+    });
+
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(body?.error || 'Failed to update cart item');
+    }
+
+    updateItem(index, {
+      quantity: normalizedQuantity,
+      measure: normalizedMeasure,
+    });
+  } catch (error) {
+    console.error('Failed to update cart item:', error);
+  }
+}
+
+async function handlePersistedRemove(index: number) {
+  const item = cartItems[index];
+  if (!item) return;
+
+  try {
+    const response = await fetch('/api/cart/item', {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: item.name,
+        measure: item.measure,
+      }),
+    });
+
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(body?.error || 'Failed to remove cart item');
+    }
+
+    removeItem(index);
+  } catch (error) {
+    console.error('Failed to remove cart item:', error);
+  }
+}
+
+async function handlePersistedClearCart() {
+  try {
+    const response = await fetch('/api/cart/clear', {
+      method: 'POST',
+      credentials: 'include',
+    });
+
+    const body = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(body?.error || 'Failed to clear cart');
+    }
+
+    clearCart();
+  } catch (error) {
+    console.error('Failed to clear cart:', error);
+  }
+}
+
   const renderCartItem = (item: CartIngredient, index: number) => {
     const isEditing = editingItem?.index === index;
 
@@ -330,11 +417,12 @@ export default function CartPage() {
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  updateItem(index, {
-                    quantity: Number(editingItem.quantity),
-                    measure: editingItem.measure,
-                  });
+                onClick={async () => {
+                  await handlePersistedUpdate(
+                    index,
+                    Number(editingItem.quantity),
+                    editingItem.measure
+                  );
                   setEditingItem(null);
                 }}
                 className="rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-emerald-700"
@@ -357,7 +445,7 @@ export default function CartPage() {
                 Edit
               </button>
               <button
-                onClick={() => removeItem(index)}
+                onClick={() => void handlePersistedRemove(index)}
                 className="rounded px-3 py-1 text-sm font-medium text-slate-600 transition-colors hover:bg-red-50 hover:text-red-600"
               >
                 Remove
@@ -689,7 +777,7 @@ export default function CartPage() {
               {totalIngredientCount !== 1 ? 's' : ''} from selected recipes
             </p>
             <button
-              onClick={() => clearCart()}
+              onClick={() => void handlePersistedClearCart()}
               className="w-fit rounded-lg px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
             >
               Clear cart
