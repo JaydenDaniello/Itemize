@@ -41,9 +41,9 @@ export const useCartStore = create<CartStore>()(
     (set) => ({
       items: [],
       setItems: (items) =>
-        set({
-          items: items.map(normalizeStoredCartIngredient),
-        }),
+        set((state) => ({
+          items: hydrateCartIngredients(state.items, items),
+        })),
       addIngredients: (ingredients) =>
         set((state) => ({
           items: mergeCartIngredients(state.items, ingredients),
@@ -138,7 +138,7 @@ function normalizeStoredCartIngredient(
     item.normalizedName ?? normalizeIngredient(item.name ?? '');
   const measure = item.measure ?? '';
   const measures = item.measures?.length ? item.measures : [measure];
-  const key = normalizedName;
+  const key = item.key ?? item.itemId ?? `${normalizedName}-${measure || 'to-taste'}`;
   const recipeSources = item.recipeSources?.length
     ? item.recipeSources
     : [];
@@ -155,6 +155,34 @@ function normalizeStoredCartIngredient(
     matchedName: item.matchedName,
     itemId: item.itemId,
   };
+}
+
+function hydrateCartIngredients(
+  existingItems: CartIngredient[],
+  incomingItems: CartIngredient[]
+): CartIngredient[] {
+  const groupedIncomingItems = mergeCartIngredients([], incomingItems);
+  const existingByNormalizedName = new Map(
+    existingItems.map((item) => [item.normalizedName, normalizeStoredCartIngredient(item)])
+  );
+
+  return groupedIncomingItems.map((item) => {
+    const existing = existingByNormalizedName.get(item.normalizedName);
+
+    if (!existing) {
+      return item;
+    }
+
+    return {
+      ...item,
+      key: existing.key || item.key,
+      recipeSources:
+        existing.recipeSources.length > 0
+          ? mergeRecipeSources(existing.recipeSources, item.recipeSources)
+          : item.recipeSources,
+      matchedName: existing.matchedName ?? item.matchedName,
+    };
+  });
 }
 
 function mergeRecipeSources(

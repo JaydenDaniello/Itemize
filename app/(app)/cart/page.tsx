@@ -9,7 +9,8 @@ import {
 } from '@/lib/preferencesStore';
 import type { CartIngredient } from '@/lib/cartStore';
 import { normalizeIngredient } from '@/lib/ingredient/normalize';
-import { isDemoStoreName } from '@/lib/demoStores';
+import { matchIngredient } from '@/lib/normalizeIngredient';
+import { DEMO_STORES } from '@/lib/demoStores';
 
 type EditingCartItem = {
   index: number;
@@ -20,6 +21,7 @@ type EditingCartItem = {
 type RawStore = {
   id?: string;
   storeId?: string;
+  slug?: string;
   name: string;
   address: string | null;
   city: string | null;
@@ -30,6 +32,7 @@ type RawStore = {
 };
 
 type Store = {
+  id: string;
   storeId: string;
   name: string;
   address: string | null;
@@ -48,6 +51,8 @@ type PreferencesResponse = {
   };
   stores: RawStore[];
 };
+
+type StoresResponse = RawStore[];
 
 type CartResponse = {
   cart: {
@@ -92,6 +97,22 @@ function formatCurrency(value: number) {
 function buildGoogleMapsDirectionsUrl(store: Store) {
   const destination = formatStoreAddress(store) || store.name;
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+}
+
+function getDemoStoreLookupKey(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function matchesDemoStore(rawStore: RawStore, demoStore: (typeof DEMO_STORES)[number]) {
+  const demoKey = getDemoStoreLookupKey(demoStore.name);
+  const rawNameKey = getDemoStoreLookupKey(rawStore.name);
+  const rawSlugKey = getDemoStoreLookupKey(rawStore.slug ?? rawStore.storeId ?? rawStore.id ?? '');
+
+  return (
+    rawNameKey === demoKey ||
+    rawNameKey.startsWith(demoKey) ||
+    rawSlugKey.startsWith(demoKey)
+  );
 }
 
 export default function CartPage() {
@@ -150,17 +171,28 @@ export default function CartPage() {
       setStoresError(false);
 
       try {
-        const response = await fetch('/api/preferences', {
-          credentials: 'include',
-        });
+        const [preferencesResponse, storesResponse] = await Promise.all([
+          fetch('/api/preferences', {
+            credentials: 'include',
+          }),
+          fetch('/api/stores', {
+            credentials: 'include',
+          }),
+        ]);
 
-        const body = await response.json().catch(() => null);
+        const preferencesBody = await preferencesResponse.json().catch(() => null);
+        const storesBody = await storesResponse.json().catch(() => null);
 
-        if (!response.ok) {
-          throw new Error(body?.error || 'Failed to load preferences');
+        if (!preferencesResponse.ok) {
+          throw new Error(preferencesBody?.error || 'Failed to load preferences');
         }
 
-        const data = body as PreferencesResponse;
+        if (!storesResponse.ok || !Array.isArray(storesBody)) {
+          throw new Error('Failed to load stores');
+        }
+
+        const data = preferencesBody as PreferencesResponse;
+        const allStores = storesBody as StoresResponse;
 
         const normalizedStores: Store[] = data.stores
           .map((store) => {
@@ -171,6 +203,7 @@ export default function CartPage() {
             }
 
             return {
+              id: resolvedStoreId,
               storeId: resolvedStoreId,
               name: store.name,
               address: store.address,
@@ -183,16 +216,26 @@ export default function CartPage() {
           })
           .filter((store): store is Store => store !== null);
 
-        const uniqueStores = Array.from(
-          new Map(
-            normalizedStores.map((store) => [store.storeId, store])
-          ).values()
-        );
+        const availableStores = DEMO_STORES.map((demoStore) => {
+          const matchedStore = allStores.find((store) =>
+            matchesDemoStore(store, demoStore)
+          );
+          const matchedPreferenceStore = normalizedStores.find((store) =>
+            matchesDemoStore(store, demoStore)
+          );
 
-        const availableStores = uniqueStores
-          .filter((store) => !store.isExcluded)
-          .filter((store) => isDemoStoreName(store.name))
-          .sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
+          return {
+            id: matchedStore?.id ?? matchedStore?.storeId ?? demoStore.slug,
+            storeId: demoStore.slug,
+            name: matchedStore?.name ?? demoStore.name,
+            address: matchedStore?.address ?? demoStore.address,
+            city: matchedStore?.city ?? demoStore.city,
+            state: matchedStore?.state ?? demoStore.state,
+            zip: matchedStore?.zip ?? demoStore.zip,
+            isFavorite: matchedPreferenceStore?.isFavorite ?? false,
+            isExcluded: matchedPreferenceStore?.isExcluded ?? false,
+          };
+        }).sort((a, b) => Number(b.isFavorite) - Number(a.isFavorite));
 
         if (!cancelled) {
           setOptimizeFor(data.userPreference.optimizeFor ?? 'cost');
@@ -244,17 +287,21 @@ export default function CartPage() {
 
         const hydratedItems: CartIngredient[] = data.items.map((item) => {
           const measure = item.unit?.trim() || 'To taste';
+          const matchedIngredient =
+            matchIngredient(item.itemId) ?? matchIngredient(item.name);
+          const normalizedName =
+            matchedIngredient?.normalizedName ?? normalizeIngredient(item.name);
 
           return {
-            key: item.id,
+            key: item.id || `${normalizedName}-${measure}`,
             name: item.name,
             measure,
             measures: [measure],
             quantity: item.quantity,
             mapped: true,
-            normalizedName: normalizeIngredient(item.name),
+            normalizedName,
             recipeSources: [],
-            matchedName: item.name,
+            matchedName: matchedIngredient?.name ?? item.name,
             itemId: item.itemId,
           };
         });
@@ -285,10 +332,11 @@ export default function CartPage() {
         return;
       }
 
-      const pricedItems = cartItems
+        const pricedItems = cartItems
         .filter((item) => item.itemId)
         .map((item) => ({
           itemId: item.itemId as string,
+          normalizedName: item.normalizedName,
           quantity: item.quantity,
           name: item.name,
         }));
@@ -430,99 +478,12 @@ export default function CartPage() {
     }
   }
 
-  async function handlePersistedUpdate(index: number, quantity: number, measure: string) {
-  const item = cartItems[index];
-  if (!item) return;
-
-  const normalizedQuantity = Number.isFinite(quantity)
-    ? Math.max(1, Math.round(quantity))
-    : item.quantity;
-
-  const normalizedMeasure = measure.trim() || 'To taste';
-
-  try {
-    const response = await fetch('/api/cart/item', {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        name: item.name,
-        quantity: normalizedQuantity,
-        measure: normalizedMeasure,
-      }),
-    });
-
-    const body = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      throw new Error(body?.error || 'Failed to update cart item');
-    }
-
-    updateItem(index, {
-      quantity: normalizedQuantity,
-      measure: normalizedMeasure,
-    });
-  } catch (error) {
-    console.error('Failed to update cart item:', error);
-  }
-}
-
-async function handlePersistedRemove(index: number) {
-  const item = cartItems[index];
-  if (!item) return;
-
-  try {
-    const response = await fetch('/api/cart/item', {
-      method: 'DELETE',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include',
-      body: JSON.stringify({
-        name: item.name,
-        measure: item.measure,
-      }),
-    });
-
-    const body = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      throw new Error(body?.error || 'Failed to remove cart item');
-    }
-
-    removeItem(index);
-  } catch (error) {
-    console.error('Failed to remove cart item:', error);
-  }
-}
-
-async function handlePersistedClearCart() {
-  try {
-    const response = await fetch('/api/cart/clear', {
-      method: 'POST',
-      credentials: 'include',
-    });
-
-    const body = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      throw new Error(body?.error || 'Failed to clear cart');
-    }
-
-    clearCart();
-  } catch (error) {
-    console.error('Failed to clear cart:', error);
-  }
-}
-
   const renderCartItem = (item: CartIngredient, index: number) => {
     const isEditing = editingItem?.index === index;
 
     return (
       <div
-        key={item.key ?? `${item.name}-${item.measure}-${index}`}
+        key={`${item.key ?? item.normalizedName}-${index}`}
         className={`flex flex-col gap-4 rounded-xl border px-4 py-3 sm:flex-row sm:items-start sm:justify-between ${
           item.mapped
             ? 'border-emerald-200 bg-emerald-50'
