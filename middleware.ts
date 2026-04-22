@@ -1,9 +1,8 @@
-/** COMMENTED FOR FASTER DEV TESTING
 import { NextRequest, NextResponse } from "next/server";
 import { ACCESS_COOKIE } from "@/lib/auth/cookies";
 import { verifyAccessToken } from "@/lib/auth/jwt";
 
-const protectedPaths = ["/home", "/recipes", "/cart", "/stores"];
+const protectedPaths = ["/home", "/recipes", "/cart", "/stores", "/preferences"];
 
 function isProtectedPath(pathname: string) {
   return protectedPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`));
@@ -38,6 +37,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/home/:path*", "/recipes/:path*", "/cart/:path*", "/stores/:path*"],
+  matcher: ["/home/:path*", "/recipes/:path*", "/cart/:path*", "/stores/:path*", "/preferences/:path*"],
 };
-*/

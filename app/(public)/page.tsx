@@ -42,8 +42,6 @@ export default function LandingPage() {
             >
               Sign In
             </button>
-
-            <Link href="/home">Enter App - temporary link</Link>
           </div>
         </section>
       </main>
